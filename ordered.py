@@ -3,51 +3,63 @@ from collections import defaultdict, deque
 from skimage.morphology import skeletonize
 import cv2
 
+import numpy as np
+from skimage.morphology import skeletonize
+from collections import defaultdict, deque
+
 def get_neighbors(coord, mask):
     x, y = coord
-    neighbors = []
-    for dx in [-1, 0, 1]:
-        for dy in [-1, 0, 1]:
+    for dx in [-1,0,1]:
+        for dy in [-1,0,1]:
             if dx == 0 and dy == 0:
                 continue
-            nx, ny = x + dx, y + dy
+            nx, ny = x+dx, y+dy
             if 0 <= nx < mask.shape[0] and 0 <= ny < mask.shape[1]:
-                if mask[nx, ny] == 1:
-                    neighbors.append((nx, ny))
-    return neighbors
+                if mask[nx,ny] == 1:
+                    yield (nx,ny)
 
-def order_mask_points(mask):
-    points = set(map(tuple, np.argwhere(mask == 1)))
-    
+def build_graph(mask):
     graph = defaultdict(list)
-    for pt in points:
-        for nb in get_neighbors(pt, mask):
-            graph[pt].append(nb)
-    
-    endpoints = [pt for pt, nbs in graph.items() if len(nbs) == 1]
-    if not endpoints:
-        raise ValueError("没有找到端点，可能是闭合曲线")
-    
-    start = endpoints[0]
-    
-    ordered = []
-    visited = set()
-    stack = deque([start])
-    
-    prev = None
-    while stack:
-        pt = stack.pop()
-        if pt in visited:
-            continue
-        visited.add(pt)
-        ordered.append(pt)
-        for nb in graph[pt]:
-            if nb not in visited:
-                stack.append(nb)
-    return ordered
+    coords = np.argwhere(mask==1)
+    for x,y in map(tuple, coords):
+        for nb in get_neighbors((x,y), mask):
+            graph[(x,y)].append(nb)
+    return graph
 
-mask = cv2.imread("mask/maskthick_cam2.png", cv2.IMREAD_GRAYSCALE)
+def find_endpoints(graph):
+    return [pt for pt,nbs in graph.items() if len(nbs)==1]
+
+def bfs_path(graph, start, end):
+    queue = deque([(start,[start])])
+    visited = set([start])
+    while queue:
+        node, path = queue.popleft()
+        if node == end:
+            return path
+        for nb in graph[node]:
+            if nb not in visited:
+                visited.add(nb)
+                queue.append((nb, path+[nb]))
+    return None
+
+def longest_path(mask):
+    graph = build_graph(mask)
+    endpoints = find_endpoints(graph)
+    print(endpoints)
+    if len(endpoints)<2:
+        raise ValueError("未找到足够的端点")
+    max_len=0
+    best_path=[]
+    for i in range(len(endpoints)):
+        for j in range(i+1,len(endpoints)):
+            p=bfs_path(graph,endpoints[i],endpoints[j])
+            if p and len(p)>max_len:
+                max_len=len(p)
+                best_path=p
+    return best_path
+
+mask = cv2.imread("sim_data/mask/maskthick_cam1.png", cv2.IMREAD_GRAYSCALE)
 skeleton = skeletonize(mask > 10).astype(np.uint8)
 # cv2.imwrite("mask.png", skeleton * 255)
-coords = order_mask_points(mask)
+coords = longest_path(mask)
 print(coords)
