@@ -13,8 +13,8 @@ objpoints = []
 imgpoints_left = [] 
 imgpoints_right = []
 
-images_left = sorted(glob.glob("calibration/C1*.bmp"))
-images_right = sorted(glob.glob("calibration/C2*.bmp"))
+images_left = sorted(glob.glob("real_data/calibration/C1*.bmp"))
+images_right = sorted(glob.glob("real_data/calibration/C2*.bmp"))
 
 images_left_eff = []
 images_right_eff = []

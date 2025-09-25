@@ -9,3 +9,6 @@ from skimage import img_as_float
 # plt.imsave("thresh.png", thresh, cmap='gray')
 
 # TODO
+import json
+para = json.load(open('sim_data/calibration/camera_params.json'))
+print(para)
