@@ -15,8 +15,11 @@ def compute_stereo_params(cams):
     dist_l = np.zeros(5)
     dist_r = np.zeros(5)
 
-    K1 = np.array(cam1_intrinsic, dtype=float)
-    K2 = np.array(cam2_intrinsic, dtype=float)
+    # K1 = np.array(cam1_intrinsic, dtype=float)
+    # K2 = np.array(cam2_intrinsic, dtype=float)
+
+    K1 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]]).astype(np.float32)
+    K2 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]]).astype(np.float32)
     
     T1 = np.array(cam1_extrinsic, dtype=float)
     T2 = np.array(cam2_extrinsic, dtype=float)
@@ -39,8 +42,11 @@ def compute_stereo_params(cams):
     
     F = np.linalg.inv(K2).T @ E @ np.linalg.inv(K1)
     
-    P1 = K1 @ np.hstack((np.eye(3), np.zeros((3,1))))
-    P2 = K2 @ np.hstack((R, T.reshape(3,1)))
+    # P1 = K1 @ np.hstack((np.eye(3), np.zeros((3,1))))
+    # P2 = K2 @ np.hstack((R, T.reshape(3,1)))
+
+    P1 = K1 @ np.array(cam1_extrinsic)[:3]
+    P2 = K2 @ np.array(cam2_extrinsic)[:3]
     
     return K1, dist_l, K2, dist_r, R, T, E, F, P1, P2
 
@@ -96,10 +102,14 @@ def reconstruct_polyline_3d(mask1_points, mask2_points, P1, P2, F):
     pt_prev_3d = (0,0,0)
     prev_idx = -1
 
+    len_l = float(len(mask1_points))
+    len_r = float(len(mask2_points))
+
     for idx in range(len(mask1_points)):
+        idx_r = int((len_r / len_l) * idx)
         v_l, u_l = mask1_points[idx]
         pt_l = np.array([u_l, v_l], dtype=np.float32).reshape(2, 1)
-        uv_point  = (mask2_points[idx][1], mask2_points[idx][0])
+        uv_point  = (mask2_points[idx_r][1], mask2_points[idx_r][0])
         pt_r = np.array(uv_point, dtype=np.float32).reshape(2, 1)
         points4D = cv2.triangulatePoints(P1, P2, pt_l, pt_r)
         pt_prev_3d = (points4D[:3] / points4D[3]).flatten()
@@ -175,15 +185,19 @@ def reconstruct_polyline_3d(mask1_points, mask2_points, P1, P2, F):
 # mask2, start_point2, end_point2 = json_to_mask("real_data/mask/C2.json", (3000, 4096))
 
 # SIM CAMERA
-para = json.load(open('sim_data/calibration/camera_params.json'))
+# para = json.load(open('sim_data/calibration/camera_params.json'))
+para = json.load(open('dataset/dataset_3/sample_0001/camera_params.json'))
 mtx_l, dist_l, mtx_r, dist_r, R, T, E, F, P1, P2 = compute_stereo_params(para)
 # mask1 = (cv2.imread("sim_data/mask/mask_1.png", cv2.IMREAD_GRAYSCALE) / 255).astype(np.uint8)
 # mask2 = (cv2.imread("sim_data/mask/mask_2.png", cv2.IMREAD_GRAYSCALE) / 255).astype(np.uint8)
 # mask_cam1 = (cv2.imread("sim_data/mask/mask_cam1.png", cv2.IMREAD_GRAYSCALE)).astype(np.uint8)
 # mask_cam2 = (cv2.imread("sim_data/mask/mask_cam2.png", cv2.IMREAD_GRAYSCALE)).astype(np.uint8)
 
-mask1_points = json_to_mask_ordered("sim_data/mask/mask_cam1.json")
-mask2_points = json_to_mask_ordered("sim_data/mask/mask_cam2.json")
+# mask1_points = json_to_mask_ordered("sim_data/mask/mask_cam1.json")
+# mask2_points = json_to_mask_ordered("sim_data/mask/mask_cam2.json")
+mask1_points = json_to_mask_ordered('dataset/dataset_3/sample_0001/mask_cam1.json')
+mask2_points = json_to_mask_ordered('dataset/dataset_3/sample_0001/mask_cam2.json')
+
 
 # img = np.zeros((2048, 512), dtype=np.uint8)
 # for (v_l, u_l) in mask1_points:
@@ -209,7 +223,12 @@ curve_3d= reconstruct_polyline_3d(mask1_points, mask2_points, P1, P2, F)
 # curve_3d_r = reconstruct_polyline_3d(mask2_points, mask1_points, P2, P1, F.T)
 # curve_3d = np.concatenate([curve_3d_l, curve_3d_r], axis=0)
 print("3D points:", curve_3d.shape)
-# print(curve_3d)
+
+print(curve_3d)
+print(np.max(curve_3d[:,0]), np.min(curve_3d[:,0]))
+print(np.max(curve_3d[:,1]), np.min(curve_3d[:,1]))
+print(np.max(curve_3d[:,2]), np.min(curve_3d[:,2]))
+quit()
 
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(curve_3d)
