@@ -225,7 +225,6 @@ curve_3d= reconstruct_polyline_3d(mask1_points, mask2_points, P1, P2, F)
 print("3D points:", curve_3d.shape)
 
 print(curve_3d[::-1])
-quit()
 
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(curve_3d)
