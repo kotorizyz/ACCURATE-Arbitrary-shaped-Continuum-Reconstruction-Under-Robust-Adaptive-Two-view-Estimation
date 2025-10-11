@@ -224,10 +224,7 @@ curve_3d= reconstruct_polyline_3d(mask1_points, mask2_points, P1, P2, F)
 # curve_3d = np.concatenate([curve_3d_l, curve_3d_r], axis=0)
 print("3D points:", curve_3d.shape)
 
-print(curve_3d)
-print(np.max(curve_3d[:,0]), np.min(curve_3d[:,0]))
-print(np.max(curve_3d[:,1]), np.min(curve_3d[:,1]))
-print(np.max(curve_3d[:,2]), np.min(curve_3d[:,2]))
+print(curve_3d[::-1])
 quit()
 
 pcd = o3d.geometry.PointCloud()
