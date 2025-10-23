@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
+import cv2
+import numpy as np
 
 class SimpleOrderNet(nn.Module):
     def __init__(self, embed_dim=16, max_order=2000):
@@ -62,7 +64,6 @@ if __name__ == "__main__":
     RATE_TRAIN = 0.5
     RATE_VAL = 0.1
     NUM_EPOCHS = 10
-    ORDER_MAX = 2000
 
     files = os.listdir('dataset/processed_data/')
     n_files = len(files)
@@ -83,30 +84,27 @@ if __name__ == "__main__":
             data_test.append(data_i)
     
     model = SimpleOrderNet().cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    model.train()
+    model.load_state_dict(torch.load('model.pth'))
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    model.eval()
 
-    for epoch in range(NUM_EPOCHS):
-        for data_i in data_train:
-            mask1 = data_i['mask1'].unsqueeze(0).unsqueeze(0).float().cuda()
-            mask2 = data_i['mask2'].unsqueeze(0).unsqueeze(0).float().cuda()
-            K1 = data_i['K1'].unsqueeze(0).float().cuda()
-            RT1 = data_i['RT1'].unsqueeze(0).float().cuda()
-            K2 = data_i['K2'].unsqueeze(0).float().cuda()
-            RT2 = data_i['RT2'].unsqueeze(0).float().cuda()
-            R1, t1 = RT1[:,:,:3], RT1[:,:,3:]
-            R2, t2 = RT2[:,:,:3], RT2[:,:,3:]
+    for data_i in data_test:
+        mask1 = data_i['mask1'].unsqueeze(0).unsqueeze(0).float().cuda()
+        mask2 = data_i['mask2'].unsqueeze(0).unsqueeze(0).float().cuda()
+        K1 = data_i['K1'].unsqueeze(0).float().cuda()
+        RT1 = data_i['RT1'].unsqueeze(0).float().cuda()
+        K2 = data_i['K2'].unsqueeze(0).float().cuda()
+        RT2 = data_i['RT2'].unsqueeze(0).float().cuda()
+        R1, t1 = RT1[:,:,:3], RT1[:,:,3:]
+        R2, t2 = RT2[:,:,:3], RT2[:,:,3:]
 
-            order1_gt = data_i['order1'].unsqueeze(0).float().cuda()
-            order2_gt = data_i['order2'].unsqueeze(0).float().cuda()
+        order1_gt = data_i['order1'].unsqueeze(0).float().cuda()
+        order2_gt = data_i['order2'].unsqueeze(0).float().cuda()
 
-            order1_pred, order2_pred = model(mask1, mask2, K1,R1,t1,K2,R2,t2)
-
-            loss = total_loss(order1_pred, order2_pred, order1_gt, order2_gt, mask1, mask2)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        print(f"[{epoch}] Loss={loss.item():.4f}")
-
-    torch.save(model.state_dict(), 'model.pth')
+        order1_pred, order2_pred = model(mask1, mask2, K1,R1,t1,K2,R2,t2)
+        uv1 = data_i['uv1'].numpy()
+        uv2 = data_i['uv2'].numpy()
+        for i in range(uv1.shape[0]):
+            u, v = uv1[i].astype(int)
+            print(order1_pred[0,0,v,u].item(), order1_gt[0,v,u].item())
+        quit()
