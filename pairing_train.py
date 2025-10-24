@@ -54,23 +54,23 @@ def compute_F_batch(K1, R1, t1, K2, R2, t2):
         Fm[b] = torch.inverse(K2[b]).T @ tx @ Rrel @ torch.inverse(K1[b])
     return Fm
 
-def epipolar_loss_batch(ptsL, ptsR, M, K1,R1,t1,K2,R2,t2):
-    B,N1,_ = ptsL.shape
-    _,N2,_ = ptsR.shape
-    Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
+def epipolar_loss_batch(ptsL, ptsR, M, K1, R1, t1, K2, R2, t2):
+    B, N1, _ = ptsL.shape
+    _, N2, _ = ptsR.shape
+    Fm = compute_F_batch(K1, R1, t1, K2, R2, t2)
     total = 0.0
     count = 0
     for b in range(B):
-        idxs = (M[b]>0.5).nonzero(as_tuple=False)
-        if idxs.numel()==0: continue
-        i_idx = idxs[:,0]
-        j_idx = idxs[:,1]
+        idxs = (M[b] > 0.5).nonzero(as_tuple = False)
+        if idxs.numel() == 0: continue
+        i_idx = idxs[:, 0]
+        j_idx = idxs[:, 1]
         x1 = ptsL[b, i_idx]
         x2 = ptsR[b, j_idx]
-        x1h = torch.cat([x1, torch.ones((x1.shape[0],1), device=x1.device)], dim=1)
-        x2h = torch.cat([x2, torch.ones((x2.shape[0],1), device=x2.device)], dim=1)
+        x1h = torch.cat([x1, torch.ones((x1.shape[0], 1), device = x1.device)], dim=1)
+        x2h = torch.cat([x2, torch.ones((x2.shape[0], 1), device = x2.device)], dim=1)
         Fx1 = (Fm[b] @ x1h.T).T
-        e = torch.abs((x2h * Fx1).sum(dim=1))
+        e = torch.abs((x2h * Fx1).sum(dim = 1))
         total += e.sum()
         count += e.shape[0]
     return total / (count + 1e-9)
@@ -87,8 +87,8 @@ def collate_fn(batch):
     N2max = max([s['ptsR'].shape[0] for s in batch])
     ptsL = torch.zeros((B, N1max, 2))
     ptsR = torch.zeros((B, N2max, 2))
-    maskL = torch.zeros((B, N1max), dtype=torch.bool)
-    maskR = torch.zeros((B, N2max), dtype=torch.bool)
+    maskL = torch.zeros((B, N1max), dtype = torch.bool)
+    maskR = torch.zeros((B, N2max), dtype = torch.bool)
     M = torch.zeros((B, N1max, N2max))
     K1 = []
     R1 = []
@@ -101,10 +101,10 @@ def collate_fn(batch):
         n2 = s['ptsR'].shape[0]
         if n1>0: 
             ptsL[b,:n1] = s['ptsL']
-            maskL[b,:n1]=True
+            maskL[b,:n1] = True
         if n2>0: 
             ptsR[b,:n2] = s['ptsR'] 
-            maskR[b,:n2]=True
+            maskR[b,:n2] = True
         if 'M' in s: 
             M[b,:n1,:n2] = s['M']
         K1.append(s['K1'])
@@ -128,7 +128,7 @@ def collate_fn(batch):
 #         j = random.randrange(N2); M[i,j]=1.0
 #     return {'ptsL':ptsL, 'ptsR':ptsR, 'K1':K, 'R1':R, 't1':t, 'K2':K, 'R2':R, 't2':t, 'M':M}
 
-def make_sample(dir=''):
+def make_sample(dir = ''):
     data_i = torch.load(dir)
     return {'ptsL':data_i['x1'], 'ptsR':data_i['x2'], 'K1':data_i['K1'], 'R1':data_i['RT1'][:,:3], 't1':data_i['RT1'][:,3], 'K2':data_i['K2'], 'R2':data_i['RT2'][:,:3], 't2':data_i['RT2'][:,3], 'M':data_i['M_ij']}
     
@@ -136,9 +136,9 @@ def make_sample(dir=''):
 # samples = [make_sample(20,22) for _ in range(8)]
 samples = [make_sample(f'dataset/processed_data/data_{i+1}.pt') for i in range(100)]
 ds = PairsDataset(samples)
-dl = DataLoader(ds, batch_size=2, collate_fn=collate_fn, shuffle=True)
+dl = DataLoader(ds, batch_size = 2, collate_fn = collate_fn, shuffle = True)
 
-model = CrossMatchModel(d_model=64, use_view_encoders=False, epi_bias_scale=0.3).to(DEVICE)
+model = CrossMatchModel(d_model = 64, use_view_encoders = False, epi_bias_scale = 0.3).to(DEVICE)
 opt = torch.optim.Adam(model.parameters(), lr=1e-4)
 bce = nn.BCEWithLogitsLoss()
 
@@ -161,22 +161,25 @@ for i in range(100):
         # compute epi_dist per batch element (normalized)
         with torch.no_grad():
             Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
-            B,N1,_ = ptsL.shape; _,N2,_ = ptsR.shape
+            B, N1, _ = ptsL.shape
+            _, N2, _ = ptsR.shape
             epi = torch.zeros((B,N1,N2), device=DEVICE)
             for b in range(B):
                 x1 = ptsL[b]; x2 = ptsR[b]
-                x1h = torch.cat([x1, torch.ones((N1,1), device=DEVICE)], dim=1)
-                x2h = torch.cat([x2, torch.ones((N2,1), device=DEVICE)], dim=1)
+                x1h = torch.cat([x1, torch.ones((N1,1), device=DEVICE)], dim = 1)
+                x2h = torch.cat([x2, torch.ones((N2,1), device=DEVICE)], dim = 1)
                 Fx1 = (Fm[b] @ x1h.T).T  # (N1,3)
                 Mpair = torch.abs(x2h @ Fx1.T)  # (N2,N1)
                 epi[b] = Mpair.T
-            epi = epi / (epi.mean(dim=(1,2), keepdim=True)+1e-9)
+            epi = epi / (epi.mean(dim = (1,2), keepdim = True)+1e-9)
 
         sim = model(ptsL, ptsR, maskL, maskR, epi)
         loss_match = bce(sim, M)
-        loss_epi = epipolar_loss_batch(ptsL, ptsR, M, K1,R1,t1,K2,R2,t2)
-        loss = loss_match + 0.1*loss_epi
-        opt.zero_grad(); loss.backward(); opt.step()
+        loss_epi = epipolar_loss_batch(ptsL, ptsR, M, K1, R1, t1, K2, R2, t2)
+        loss = loss_match + 0.1 * loss_epi
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
         loss_epo += loss.item()
     print("Epoch loss:", loss_epo)
 
@@ -195,7 +198,8 @@ with torch.no_grad():
     t2 = test_sample['t2'].unsqueeze(0).to(DEVICE)
 
     Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
-    B,N1,_ = ptsL.shape; _,N2,_ = ptsR.shape
+    B, N1, _ = ptsL.shape
+    _, N2, _ = ptsR.shape
     epi = torch.zeros((B,N1,N2), device=DEVICE)
     for b in range(B):
         x1 = ptsL[b]; x2 = ptsR[b]
