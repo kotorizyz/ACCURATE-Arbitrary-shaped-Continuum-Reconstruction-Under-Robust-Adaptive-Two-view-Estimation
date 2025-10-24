@@ -64,18 +64,19 @@ for file in files:
     u2 = uv_cam2[:,0].astype(np.int32)
     v2 = uv_cam2[:,1].astype(np.int32)
     img2[v2, u2] = 1
-
-    # ordered number
-    order1 = np.zeros(image_size).astype(np.int32)
-    order2 = np.zeros(image_size).astype(np.int32)
+    
+    # M_ij Mat
+    x1 = np.argwhere(img1 > 0)                                  # (N1, 2)
+    x2 = np.argwhere(img2 > 0)                                  # (N2, 2)
+    M_ij = np.zeros((x1.shape[0], x2.shape[0])).astype(np.uint8)   # (N1, N2)
     for i in range(N):
         u1 = uv_cam1[i,0].astype(np.int32)
         v1 = uv_cam1[i,1].astype(np.int32)
-        order1[v1, u1] = i + 1
         u2 = uv_cam2[i,0].astype(np.int32)
         v2 = uv_cam2[i,1].astype(np.int32)
-        order2[v2, u2] = i + 1
-    
+        idx1 = np.where((x1[:,0]==v1) & (x1[:,1]==u1))[0][0]
+        idx2 = np.where((x2[:,0]==v2) & (x2[:,1]==u2))[0][0]
+        M_ij[idx1, idx2] = 1
 
     # img = mask1 * 100 + img1
     # cv2.imwrite('img1.png', img1)
@@ -92,8 +93,9 @@ for file in files:
     image_size = torch.tensor(image_size, dtype=torch.int32)    # (2, )
     mask1 = torch.tensor(img1, dtype=torch.uint8)               # (H, W)
     mask2 = torch.tensor(img2, dtype=torch.uint8)               # (H, W)
-    order1 = torch.tensor(order1, dtype=torch.int32)            # (H, W)
-    order2 = torch.tensor(order2, dtype=torch.int32)            # (H, W)
+    x1 = torch.tensor(x1, dtype=torch.int32)                    # (N1, 2)
+    x2 = torch.tensor(x2, dtype=torch.int32)                    # (N2, 2)
+    M_ij = torch.tensor(M_ij, dtype=torch.uint8)                # (N1, N2)
     data = {
         'uv1': uv1,
         'uv2': uv2,
@@ -105,7 +107,8 @@ for file in files:
         'image_size': image_size,
         'mask1' : mask1,
         'mask2' : mask2,
-        'order1' : order1,
-        'order2' : order2
+        'x1' : x1,
+        'x2' : x2,
+        'M_ij' : M_ij
     }
     torch.save(data, f'dataset/processed_data/data_{file_idx}.pt')
