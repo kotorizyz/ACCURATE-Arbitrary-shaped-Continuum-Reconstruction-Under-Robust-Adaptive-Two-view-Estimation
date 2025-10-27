@@ -7,6 +7,8 @@ import math
 import random
 from torch.utils.data import Dataset, DataLoader
 from typing import Dict, Tuple
+import numpy as np
+import open3d as o3d
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -126,45 +128,33 @@ def sinkhorn(log_alpha: torch.Tensor, iters: int = 20, eps: float = 1e-9) -> tor
         X = X / (X.sum(dim=-2, keepdim=True) + eps)  # normalize cols
     return X
 
-def matching_loss(
-    logits: torch.Tensor,
-    epi: torch.Tensor,
-    M: torch.Tensor,
-    weights: dict = None
-) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+def triangulate_point(pL, pR, K1, R1, t1, K2, R2, t2):
+    """
+    pL, pR: (2,) 像素坐标
+    K1, K2: (3,3) 相机内参
+    R1, R2: (3,3) 外参旋转矩阵
+    t1, t2: (3,) 外参平移
+    return X: (3,) 世界坐标
+    """
+    # 投影矩阵 P = K [R|t]
+    P1 = np.hstack([R1, t1.reshape(3,1)])
+    P1 = K1 @ P1
+    P2 = np.hstack([R2, t2.reshape(3,1)])
+    P2 = K2 @ P2
 
-    if weights is None:
-        weights = {
-            "bce": 1.0,
-            "epi_pen": 0.1,
-            "sym": 0.2,
-        }
+    uL, vL = pL
+    uR, vR = pR
 
-    P = torch.sigmoid(logits)
+    A = np.zeros((4,4))
+    A[0] = uL*P1[2] - P1[0]
+    A[1] = vL*P1[2] - P1[1]
+    A[2] = uR*P2[2] - P2[0]
+    A[3] = vR*P2[2] - P2[1]
 
-    # Binary Cross Entropy
-    loss_bce = F.binary_cross_entropy(P, M.float(), reduction='mean')
-
-    # Epi Loss
-    loss_epi = (P * epi).mean()
-
-    # 对称一致性
-    P_row = P / (P.sum(dim=-1, keepdim=True) + 1e-8)
-    P_col = P / (P.sum(dim=-2, keepdim=True) + 1e-8)
-    loss_sym = torch.abs(P_row - P_col).mean()
-
-    total = (
-        weights["bce"] * loss_bce
-        + weights["epi_pen"] * loss_epi
-        + weights["sym"] * loss_sym
-    )
-
-    details = {
-        "bce": loss_bce.detach(),
-        "epi_pen": loss_epi.detach(),
-        "sym": loss_sym.detach(),
-    }
-    return total, details
+    _, _, Vt = np.linalg.svd(A)
+    X = Vt[-1]
+    X = X[:3] / X[3]   # 齐次归一化
+    return X
 
 class PairsDataset(Dataset):
     def __init__(self, samples):
@@ -208,71 +198,66 @@ def collate_fn(batch):
             'K1':torch.stack(K1), 'R1':torch.stack(R1), 't1':torch.stack(t1),
             'K2':torch.stack(K2), 'R2':torch.stack(R2), 't2':torch.stack(t2)}
 
-# small synthetic data
-# def make_sample(N1=16, N2=18):
-#     ptsL = torch.rand((N1,2))*127.0
-#     ptsR = torch.rand((N2,2))*127.0
-#     K = torch.tensor([[120.0,0.0,64.0],[0.0,120.0,64.0],[0.0,0.0,1.0]])
-#     R = torch.eye(3); t = torch.zeros((3,1))
-#     M = torch.zeros((N1,N2))
-#     for i in range(min(N1,N2)//2):
-#         j = random.randrange(N2); M[i,j]=1.0
-#     return {'ptsL':ptsL, 'ptsR':ptsR, 'K1':K, 'R1':R, 't1':t, 'K2':K, 'R2':R, 't2':t, 'M':M}
-
 def make_sample(dir = ''):
     data_i = torch.load(dir)
     return {'ptsL':data_i['x1'], 'ptsR':data_i['x2'], 'K1':data_i['K1'], 'R1':data_i['RT1'][:,:3], 't1':data_i['RT1'][:,3], 'K2':data_i['K2'], 'R2':data_i['RT2'][:,:3], 't2':data_i['RT2'][:,3], 'M':data_i['M_ij']}
 
-# samples = [make_sample(20,22) for _ in range(8)]
-samples = [make_sample(f'dataset/processed_data/data_{i+1}.pt') for i in range(100)]
+
+samples = [make_sample(f'dataset/processed_data/data_{i+1}.pt') for i in range(100, 135)]
 ds = PairsDataset(samples)
 dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = True)
 
-# model = CrossMatchModel(d_model = 64, epi_bias_scale = 0.3).to(DEVICE)
 model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4, use_sinkhorn=False).to(DEVICE)
-opt = torch.optim.Adam(model.parameters(), lr=2e-4)
 
-for i in range(1000):
-    loss_epo = 0
-    for batch in dl:
-        ptsL = batch['ptsL'][:,:,[1,0]].to(DEVICE)                  # (B, N1, 2)
-        ptsR = batch['ptsR'][:,:,[1,0]].to(DEVICE)                  # (B, N2, 2)
-        M = batch['M'].to(DEVICE)                                   # (B, N1, N2)
-        K1 = batch['K1'].to(DEVICE)
-        R1 = batch['R1'].to(DEVICE)
-        t1 = batch['t1'].to(DEVICE)
-        K2 = batch['K2'].to(DEVICE)
-        R2 = batch['R2'].to(DEVICE)
-        t2 = batch['t2'].to(DEVICE)
+# load
+model_path = 'pair.pth'
+state_dict = torch.load(model_path, map_location=DEVICE)
+missing, unexpected = model.load_state_dict(state_dict, strict=False)
+model.eval()
 
-        # compute epi_dist per batch element (normalized)
-        with torch.no_grad():
-            Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
-            B, N1, _ = ptsL.shape
-            _, N2, _ = ptsR.shape
-            epi = torch.zeros((B,N1,N2), device=DEVICE)
-            for b in range(B):
-                x1 = ptsL[b]
-                x2 = ptsR[b]
-                x1h = torch.cat([x1, torch.ones((N1,1), device=DEVICE)], dim = 1)
-                x2h = torch.cat([x2, torch.ones((N2,1), device=DEVICE)], dim = 1)
-                Fx1 = (Fm[b] @ x1h.T).T
-                Mpair = torch.abs(x2h @ Fx1.T)
-                epi[b] = Mpair.T
-            epi = epi / (epi.mean(dim = (1,2), keepdim = True)+1e-9)
+loss_epo = 0
+for batch in dl:
+    ptsL = batch['ptsL'][:,:,[1,0]].to(DEVICE)                  # (B, N1, 2)
+    ptsR = batch['ptsR'][:,:,[1,0]].to(DEVICE)                  # (B, N2, 2)
+    M = batch['M'].to(DEVICE)                                   # (B, N1, N2)
+    K1 = batch['K1'].to(DEVICE)
+    R1 = batch['R1'].to(DEVICE)
+    t1 = batch['t1'].to(DEVICE)
+    K2 = batch['K2'].to(DEVICE)
+    R2 = batch['R2'].to(DEVICE)
+    t2 = batch['t2'].to(DEVICE)
 
-        out = model(ptsL, ptsR, epi)
-        logits = out["logits"]
-        loss, comps = matching_loss(logits, epi, M)
+    # compute epi_dist per batch element (normalized)
+    with torch.no_grad():
+        Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
+        B, N1, _ = ptsL.shape
+        _, N2, _ = ptsR.shape
+        epi = torch.zeros((B,N1,N2), device=DEVICE)
+        for b in range(B):
+            x1 = ptsL[b]
+            x2 = ptsR[b]
+            x1h = torch.cat([x1, torch.ones((N1,1), device=DEVICE)], dim = 1)
+            x2h = torch.cat([x2, torch.ones((N2,1), device=DEVICE)], dim = 1)
+            Fx1 = (Fm[b] @ x1h.T).T
+            Mpair = torch.abs(x2h @ Fx1.T)
+            epi[b] = Mpair.T
+        epi = epi / (epi.mean(dim = (1,2), keepdim = True)+1e-9)
 
-        # loss_match = F.binary_cross_entropy_with_logits(sim, M.float())
-        # P = F.softmax(sim, dim=2)
-        # loss_epi = (P * epi).sum(dim=2).mean()
+    out = model(ptsL, ptsR, epi)
+    logits = out["logits"]
+    P = torch.sigmoid(logits)
+    pts = []
+    for i in range(N1):
+        # print(ptsL[0,i], ptsR[0,torch.argmax(P[0,i])], M[0,i,torch.argmax(P[0,i])])
+        idxL = i
+        idxR = torch.argmax(P[0,i], dim=0).item()
+        ptL = ptsL[0,idxL]
+        ptR = ptsR[0,idxR]
+        pt3d = triangulate_point(ptL.cpu().numpy(), ptR.cpu().numpy(), K1[0].cpu().numpy(), R1[0].cpu().numpy(), t1[0].cpu().numpy(), K2[0].cpu().numpy(), R2[0].cpu().numpy(), t2[0].cpu().numpy())
+        pts.append(pt3d)
 
-        # loss = loss_match + loss_epi
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-        loss_epo += loss.item()
-    print(f"Epoch: {i+1}, Loss:", loss_epo)
-torch.save(model.state_dict(), 'pair.pth')
+    pts = np.array(pts)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts)
+    o3d.io.write_point_cloud("test.ply", pcd)
+    quit()
