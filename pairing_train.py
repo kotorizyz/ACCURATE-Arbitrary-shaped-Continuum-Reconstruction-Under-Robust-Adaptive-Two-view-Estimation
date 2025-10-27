@@ -10,38 +10,28 @@ from torch.utils.data import Dataset, DataLoader
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class CrossMatchModel(nn.Module):
-    def __init__(self, d_model=64, use_view_encoders=False, epi_bias_scale=1.0):
+    def __init__(self, d_model=64, epi_bias_scale=1.0):
         super().__init__()
         self.input_embed = nn.Sequential(nn.Linear(2, d_model),
                                         nn.ReLU(), 
                                         nn.Linear(d_model, d_model))
-        self.use_view_encoders = use_view_encoders
-        if use_view_encoders:
-            enc = nn.TransformerEncoderLayer(d_model=d_model, nhead=4, dim_feedforward=d_model*2, batch_first=True)
-            self.encoder_L = nn.TransformerEncoder(enc, num_layers=1)
-            self.encoder_R = nn.TransformerEncoder(enc, num_layers=1)
+
         self.query_proj = nn.Linear(d_model, d_model, bias=False)
         self.key_proj = nn.Linear(d_model, d_model, bias=False)
         self.scale = math.sqrt(d_model)
         self.epi_bias_scale = epi_bias_scale
 
-    def forward(self, ptsL, ptsR, maskL, maskR, epi_dist=None):
+    def forward(self, ptsL, ptsR, epi_dist=None):
         B, N1, _ = ptsL.shape
         _, N2, _ = ptsR.shape
         eL = self.input_embed(ptsL)
         eR = self.input_embed(ptsR)
-        if self.use_view_encoders:
-            eL = self.encoder_L(eL, src_key_padding_mask=(~maskL))
-            eR = self.encoder_R(eR, src_key_padding_mask=(~maskR))
+
         Q = self.query_proj(eL)
         K = self.key_proj(eR)
         sim = torch.bmm(Q, K.transpose(1,2)) / (self.scale + 1e-9)
         if epi_dist is not None:
             sim = sim - self.epi_bias_scale * epi_dist.to(sim.dtype)
-        if maskL is not None:
-            sim = sim.masked_fill((~maskL).unsqueeze(-1), float("-1e9"))
-        if maskR is not None:
-            sim = sim.masked_fill((~maskR).unsqueeze(1), float("-1e9"))
         return sim
 
 def compute_F_batch(K1, R1, t1, K2, R2, t2):
@@ -96,16 +86,16 @@ def collate_fn(batch):
     K2 = []
     R2 = []
     t2 = []
-    for b,s in enumerate(batch):
+    for b, s in enumerate(batch):
         n1 = s['ptsL'].shape[0]
         n2 = s['ptsR'].shape[0]
-        if n1>0: 
+        if n1 > 0:
             ptsL[b,:n1] = s['ptsL']
             maskL[b,:n1] = True
-        if n2>0: 
+        if n2 > 0:
             ptsR[b,:n2] = s['ptsR'] 
             maskR[b,:n2] = True
-        if 'M' in s: 
+        if 'M' in s:
             M[b,:n1,:n2] = s['M']
         K1.append(s['K1'])
         R1.append(s['R1'])
@@ -131,25 +121,23 @@ def collate_fn(batch):
 def make_sample(dir = ''):
     data_i = torch.load(dir)
     return {'ptsL':data_i['x1'], 'ptsR':data_i['x2'], 'K1':data_i['K1'], 'R1':data_i['RT1'][:,:3], 't1':data_i['RT1'][:,3], 'K2':data_i['K2'], 'R2':data_i['RT2'][:,:3], 't2':data_i['RT2'][:,3], 'M':data_i['M_ij']}
-    
 
 # samples = [make_sample(20,22) for _ in range(8)]
 samples = [make_sample(f'dataset/processed_data/data_{i+1}.pt') for i in range(100)]
 ds = PairsDataset(samples)
-dl = DataLoader(ds, batch_size = 2, collate_fn = collate_fn, shuffle = True)
+dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = False)
 
-model = CrossMatchModel(d_model = 64, use_view_encoders = False, epi_bias_scale = 0.3).to(DEVICE)
+model = CrossMatchModel(d_model = 64, epi_bias_scale = 0.3).to(DEVICE)
 opt = torch.optim.Adam(model.parameters(), lr=1e-4)
 bce = nn.BCEWithLogitsLoss()
 
 # one epoch demo training
 for i in range(100):
     loss_epo = 0
+    cnt = 0
     for batch in dl:
         ptsL = batch['ptsL'].to(DEVICE)
         ptsR = batch['ptsR'].to(DEVICE)
-        maskL = batch['maskL'].to(DEVICE)
-        maskR = batch['maskR'].to(DEVICE)
         M = batch['M'].to(DEVICE)
         K1 = batch['K1'].to(DEVICE)
         R1 = batch['R1'].to(DEVICE)
@@ -165,15 +153,16 @@ for i in range(100):
             _, N2, _ = ptsR.shape
             epi = torch.zeros((B,N1,N2), device=DEVICE)
             for b in range(B):
-                x1 = ptsL[b]; x2 = ptsR[b]
+                x1 = ptsL[b][:,[1,0]]
+                x2 = ptsR[b][:,[1,0]]
                 x1h = torch.cat([x1, torch.ones((N1,1), device=DEVICE)], dim = 1)
                 x2h = torch.cat([x2, torch.ones((N2,1), device=DEVICE)], dim = 1)
-                Fx1 = (Fm[b] @ x1h.T).T  # (N1,3)
-                Mpair = torch.abs(x2h @ Fx1.T)  # (N2,N1)
+                Fx1 = (Fm[b] @ x1h.T).T
+                Mpair = torch.abs(x2h @ Fx1.T)
                 epi[b] = Mpair.T
             epi = epi / (epi.mean(dim = (1,2), keepdim = True)+1e-9)
 
-        sim = model(ptsL, ptsR, maskL, maskR, epi)
+        sim = model(ptsL, ptsR, epi)
         loss_match = bce(sim, M)
         loss_epi = epipolar_loss_batch(ptsL, ptsR, M, K1, R1, t1, K2, R2, t2)
         loss = loss_match + 0.1 * loss_epi
@@ -182,34 +171,3 @@ for i in range(100):
         opt.step()
         loss_epo += loss.item()
     print("Epoch loss:", loss_epo)
-
-test_sample = make_sample('dataset/processed_data/data_101.pt')
-model.eval()
-with torch.no_grad():
-    ptsL = test_sample['ptsL'].unsqueeze(0).to(DEVICE)
-    ptsR = test_sample['ptsR'].unsqueeze(0).to(DEVICE)
-    maskL = torch.ones((1, ptsL.shape[1]), dtype=torch.bool).to(DEVICE)
-    maskR = torch.ones((1, ptsR.shape[1]), dtype=torch.bool).to(DEVICE)
-    K1 = test_sample['K1'].unsqueeze(0).to(DEVICE)
-    R1 = test_sample['R1'].unsqueeze(0).to(DEVICE)
-    t1 = test_sample['t1'].unsqueeze(0).to(DEVICE)
-    K2 = test_sample['K2'].unsqueeze(0).to(DEVICE)
-    R2 = test_sample['R2'].unsqueeze(0).to(DEVICE)
-    t2 = test_sample['t2'].unsqueeze(0).to(DEVICE)
-
-    Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
-    B, N1, _ = ptsL.shape
-    _, N2, _ = ptsR.shape
-    epi = torch.zeros((B,N1,N2), device=DEVICE)
-    for b in range(B):
-        x1 = ptsL[b]; x2 = ptsR[b]
-        x1h = torch.cat([x1, torch.ones((N1,1), device=DEVICE)], dim=1)
-        x2h = torch.cat([x2, torch.ones((N2,1), device=DEVICE)], dim=1)
-        Fx1 = (Fm[b] @ x1h.T).T  # (N1,3)
-        Mpair = torch.abs(x2h @ Fx1.T)  # (N2,N1)
-        epi[b] = Mpair.T
-    epi = epi / (epi.mean(dim=(1,2), keepdim=True)+1e-9)
-
-    sim = model(ptsL, ptsR, maskL, maskR, epi)
-    pred_M = (torch.sigmoid(sim) > 0.5).float()
-    print("Predicted matches:\n", pred_M[0])
