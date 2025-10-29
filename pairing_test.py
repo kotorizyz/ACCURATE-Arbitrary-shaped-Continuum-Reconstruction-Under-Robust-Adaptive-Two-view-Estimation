@@ -62,7 +62,7 @@ class CrossAttentionBlock(nn.Module):
         return fL, fR
 
 class MatchNet(nn.Module):
-    def __init__(self, feat_dim: int = 128, mlp_hidden: int = 64, n_layers: int = 2, nhead: int = 4, use_sinkhorn: bool = False):
+    def __init__(self, feat_dim: int = 128, mlp_hidden: int = 64, n_layers: int = 2, nhead: int = 4):
         super().__init__()
         self.feat_dim = feat_dim
         self.embedL = SmallMLP(2, mlp_hidden, feat_dim)
@@ -71,7 +71,6 @@ class MatchNet(nn.Module):
         self.cross_blocks = nn.ModuleList([CrossAttentionBlock(feat_dim, nhead) for _ in range(n_layers)])
         self.final_ln = nn.LayerNorm(feat_dim)
         self.temp = nn.Parameter(torch.tensor(1.0))  # learnable temperature
-        self.use_sinkhorn = use_sinkhorn
         self._epi_proj = nn.Linear(self.feat_dim, 1)
 
     def forward(self, ptsL: torch.Tensor, ptsR: torch.Tensor, epi: torch.Tensor = None) -> Dict[str, torch.Tensor]:
@@ -118,17 +117,7 @@ class MatchNet(nn.Module):
 
         out = {"logits": S, "P_row": P_row, "P_col": P_col}
         # optional Sinkhorn (if configured) -- returns doubly-stochastic approx
-        if self.use_sinkhorn:
-            out["P_sinkhorn"] = sinkhorn(torch.exp(S), iters=20)
         return out
-
-
-def sinkhorn(log_alpha: torch.Tensor, iters: int = 20, eps: float = 1e-9) -> torch.Tensor:
-    X = log_alpha
-    for _ in range(iters):
-        X = X / (X.sum(dim=-1, keepdim=True) + eps)  # normalize rows
-        X = X / (X.sum(dim=-2, keepdim=True) + eps)  # normalize cols
-    return X
 
 def triangulate_point(pL, pR, K1, R1, t1, K2, R2, t2):
     """
@@ -209,29 +198,27 @@ samples = [make_sample(f'dataset/processed_data/data_{i+1}.pt') for i in range(1
 ds = PairsDataset(samples)
 dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = False)
 
-model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4, use_sinkhorn=False).to(DEVICE)
+model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4).to(DEVICE)
 
 # load
 model_path = 'pair.pth'
 state_dict = torch.load(model_path, map_location=DEVICE)
 model.load_state_dict(state_dict)
-quit()
 model.eval()
 
-loss_epo = 0
-for batch in dl:
-    ptsL = batch['ptsL'][:,:,[1,0]].to(DEVICE)                  # (B, N1, 2)
-    ptsR = batch['ptsR'][:,:,[1,0]].to(DEVICE)                  # (B, N2, 2)
-    M = batch['M'].to(DEVICE)                                   # (B, N1, N2)
-    K1 = batch['K1'].to(DEVICE)
-    R1 = batch['R1'].to(DEVICE)
-    t1 = batch['t1'].to(DEVICE)
-    K2 = batch['K2'].to(DEVICE)
-    R2 = batch['R2'].to(DEVICE)
-    t2 = batch['t2'].to(DEVICE)
+with torch.no_grad():
+    for batch in dl:
+        ptsL = batch['ptsL'][:,:,[1,0]].to(DEVICE)                  # (B, N1, 2)
+        ptsR = batch['ptsR'][:,:,[1,0]].to(DEVICE)                  # (B, N2, 2)
+        M = batch['M'].to(DEVICE)                                   # (B, N1, N2)
+        K1 = batch['K1'].to(DEVICE)
+        R1 = batch['R1'].to(DEVICE)
+        t1 = batch['t1'].to(DEVICE)
+        K2 = batch['K2'].to(DEVICE)
+        R2 = batch['R2'].to(DEVICE)
+        t2 = batch['t2'].to(DEVICE)
 
-    # compute epi_dist per batch element (normalized)
-    with torch.no_grad():
+        # compute epi_dist per batch element (normalized)
         Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
         B, N1, _ = ptsL.shape
         _, N2, _ = ptsR.shape
@@ -246,22 +233,33 @@ for batch in dl:
             epi[b] = Mpair.T
         epi = epi / (epi.mean(dim = (1,2), keepdim = True)+1e-9)
 
-    out = model(ptsL, ptsR, epi)
-    logits = out["logits"]
-    P = torch.sigmoid(logits)
-    pts = []
-    for i in range(N1):
-        # print(ptsL[0,i], ptsR[0,torch.argmax(P[0,i])], M[0,i,torch.argmax(P[0,i])])
-        idxL = i
-        idxR = torch.argmax(P[0,i], dim=0).item()
-        ptL = ptsL[0,idxL]
-        ptR = ptsR[0,idxR]
-        print(ptL, ptR, idxL, idxR)
-        pt3d = triangulate_point(ptL.cpu().numpy(), ptR.cpu().numpy(), K1[0].cpu().numpy(), R1[0].cpu().numpy(), t1[0].cpu().numpy(), K2[0].cpu().numpy(), R2[0].cpu().numpy(), t2[0].cpu().numpy())
-        pts.append(pt3d)
+        out = model(ptsL, ptsR, epi)
+        logits = out["logits"]
+        P = torch.sigmoid(logits)
+        # for i in range(10):
+        #     print(torch.sort(P[0,i], descending=True).values[:int(M[0,i].sum().item())+3].cpu().numpy())
+        #     idx = torch.sort(P[0,i], descending=True).indices[:int(M[0,i].sum().item())+3].cpu().numpy()
+        #     print(M[0,i,idx].cpu().numpy())
+        #     print('-------')
+        # quit()
 
-    pts = np.array(pts)
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pts)
-    o3d.io.write_point_cloud("test.ply", pcd)
-    quit()
+        pts = []
+        for i in range(N1):
+            # print(ptsL[0,i], ptsR[0,torch.argmax(P[0,i])], M[0,i,torch.argmax(P[0,i])])
+            idxL = i
+            idxR = torch.argwhere(P[0,i]>0.2)
+            idxR = torch.argwhere(M[0,i]>0.5)
+            print(int(M[0,i].sum().item()), P[0,i, idxR].sum().item() / P[0,i].sum().item())
+            # idxR = torch.argmax(P[0,i], dim=0).item()
+            for idx in idxR:
+                idx = idx.item()
+                ptL = ptsL[0,idxL]
+                ptR = ptsR[0,idx]
+                pt3d = triangulate_point(ptL.cpu().numpy(), ptR.cpu().numpy(), K1[0].cpu().numpy(), R1[0].cpu().numpy(), t1[0].cpu().numpy(), K2[0].cpu().numpy(), R2[0].cpu().numpy(), t2[0].cpu().numpy())
+                pts.append(pt3d)
+
+        pts = np.array(pts)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pts)
+        o3d.io.write_point_cloud("test.ply", pcd)
+        quit()

@@ -222,7 +222,7 @@ dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = True)
 model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4).to(DEVICE)
 opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-for i in range(100):
+for i in range(1000):
     loss_epo = 0
     for batch in dl:
         ptsL = batch['ptsL'][:,:,[1,0]].to(DEVICE)                  # (B, N1, 2)
