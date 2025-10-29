@@ -205,7 +205,7 @@ def make_sample(dir = ''):
 
 samples = [make_sample(f'dataset/processed_data/data_{i+1}.pt') for i in range(100, 135)]
 ds = PairsDataset(samples)
-dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = True)
+dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = False)
 
 model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4, use_sinkhorn=False).to(DEVICE)
 
@@ -253,6 +253,7 @@ for batch in dl:
         idxR = torch.argmax(P[0,i], dim=0).item()
         ptL = ptsL[0,idxL]
         ptR = ptsR[0,idxR]
+        print(ptL, ptR, idxL, idxR)
         pt3d = triangulate_point(ptL.cpu().numpy(), ptR.cpu().numpy(), K1[0].cpu().numpy(), R1[0].cpu().numpy(), t1[0].cpu().numpy(), K2[0].cpu().numpy(), R2[0].cpu().numpy(), t2[0].cpu().numpy())
         pts.append(pt3d)
 
