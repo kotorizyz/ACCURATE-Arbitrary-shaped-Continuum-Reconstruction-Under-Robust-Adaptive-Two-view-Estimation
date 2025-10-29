@@ -60,7 +60,7 @@ class CrossAttentionBlock(nn.Module):
         return fL, fR
 
 class MatchNet(nn.Module):
-    def __init__(self, feat_dim: int = 128, mlp_hidden: int = 64, n_layers: int = 2, nhead: int = 4, use_sinkhorn: bool = False):
+    def __init__(self, feat_dim: int = 128, mlp_hidden: int = 64, n_layers: int = 2, nhead: int = 4):
         super().__init__()
         self.feat_dim = feat_dim
         self.embedL = SmallMLP(2, mlp_hidden, feat_dim)
@@ -69,11 +69,10 @@ class MatchNet(nn.Module):
         self.cross_blocks = nn.ModuleList([CrossAttentionBlock(feat_dim, nhead) for _ in range(n_layers)])
         self.final_ln = nn.LayerNorm(feat_dim)
         self.temp = nn.Parameter(torch.tensor(1.0))  # learnable temperature
-        self.use_sinkhorn = use_sinkhorn
         self._epi_proj = nn.Linear(self.feat_dim, 1)
 
     def forward(self, ptsL: torch.Tensor, ptsR: torch.Tensor, epi: torch.Tensor = None) -> Dict[str, torch.Tensor]:
-        # ptsL: (1, N1, 2), ptsR: (1, N2, 2), epi: (1, N1, N2) optional
+        # ptsL: (1, N1, 2), ptsR: (1, N2, 2), epi: (1, N1, N2)
         B, N1, _ = ptsL.shape
         _, N2, _ = ptsR.shape
         fL = self.embedL(ptsL)  # (1, N1, D)
@@ -87,26 +86,26 @@ class MatchNet(nn.Module):
         fR = self.final_ln(fR)
 
         # similarity logits: scaled dot-product
-        # (1, N1, D) @ (1, D, N2) -> (B, N1, N2)
+        # (1, N1, D) @ (1, D, N2) -> (1, N1, N2)
         S = torch.matmul(fL, fR.transpose(1, 2)) / (self.feat_dim ** 0.5)
         # temperature
         S = S / (torch.clamp(self.temp, min=1e-3))
 
         # incorporate epi bias if provided (we convert epi scalar to a bias via small MLP)
 
-        # epi: (B, N1, N2) -- convert to a bias of same shape
+        # epi: (1, N1, N2) -- convert to a bias of same shape
         # we pass epi as a scalar through pos_mlp by flattening and reshaping
-        # small trick: pos_mlp expects (B, L, 1) input; we process per-batch unfolded
+        # small trick: pos_mlp expects (1, L, 1) input; we process per-batch unfolded
         B, N1, N2 = epi.shape
-        epi_flat = epi.reshape(B, -1, 1)  # (B, N1*N2, 1)
-        epi_feat = self.pos_mlp(epi_flat)  # (B, N1*N2, D)
+        epi_flat = epi.reshape(B, -1, 1)  # (1, N1*N2, 1)
+        epi_feat = self.pos_mlp(epi_flat)  # (1, N1*N2, D)
         # reduce epi_feat to a scalar bias per pair using a linear projection (learnable)
         # create projection on the fly
         # proj = getattr(self, "_epi_proj", None)
         # if proj is None:
         #     self._epi_proj = nn.Linear(self.feat_dim, 1).to(S.device)
         #     proj = self._epi_proj
-        epi_bias = self._epi_proj(epi_feat).reshape(B, N1, N2)  # (B, N1, N2)
+        epi_bias = self._epi_proj(epi_feat).reshape(B, N1, N2)  # (1, N1, N2)
         S = S + epi_bias
 
         # Row and column softmax probabilities
@@ -115,17 +114,7 @@ class MatchNet(nn.Module):
 
         out = {"logits": S, "P_row": P_row, "P_col": P_col}
         # optional Sinkhorn (if configured) -- returns doubly-stochastic approx
-        if self.use_sinkhorn:
-            out["P_sinkhorn"] = sinkhorn(torch.exp(S), iters=20)
         return out
-
-
-def sinkhorn(log_alpha: torch.Tensor, iters: int = 20, eps: float = 1e-9) -> torch.Tensor:
-    X = log_alpha
-    for _ in range(iters):
-        X = X / (X.sum(dim=-1, keepdim=True) + eps)  # normalize rows
-        X = X / (X.sum(dim=-2, keepdim=True) + eps)  # normalize cols
-    return X
 
 def matching_loss(
     logits: torch.Tensor,
@@ -230,7 +219,7 @@ ds = PairsDataset(samples)
 dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = True)
 
 # model = CrossMatchModel(d_model = 64, epi_bias_scale = 0.3).to(DEVICE)
-model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4, use_sinkhorn=False).to(DEVICE)
+model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4).to(DEVICE)
 opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 for i in range(100):
