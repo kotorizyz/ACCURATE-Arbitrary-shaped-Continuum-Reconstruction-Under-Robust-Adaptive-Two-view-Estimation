@@ -72,6 +72,7 @@ class MatchNet(nn.Module):
         self.final_ln = nn.LayerNorm(feat_dim)
         self.temp = nn.Parameter(torch.tensor(1.0))  # learnable temperature
         self.use_sinkhorn = use_sinkhorn
+        self._epi_proj = nn.Linear(self.feat_dim, 1)
 
     def forward(self, ptsL: torch.Tensor, ptsR: torch.Tensor, epi: torch.Tensor = None) -> Dict[str, torch.Tensor]:
         # ptsL: (1, N1, 2), ptsR: (1, N2, 2), epi: (1, N1, N2) optional
@@ -94,21 +95,22 @@ class MatchNet(nn.Module):
         S = S / (torch.clamp(self.temp, min=1e-3))
 
         # incorporate epi bias if provided (we convert epi scalar to a bias via small MLP)
-        if epi is not None:
-            # epi: (B, N1, N2) -- convert to a bias of same shape
-            # we pass epi as a scalar through pos_mlp by flattening and reshaping
-            # small trick: pos_mlp expects (B, L, 1) input; we process per-batch unfolded
-            B, N1, N2 = epi.shape
-            epi_flat = epi.reshape(B, -1, 1)  # (B, N1*N2, 1)
-            epi_feat = self.pos_mlp(epi_flat)  # (B, N1*N2, D)
-            # reduce epi_feat to a scalar bias per pair using a linear projection (learnable)
-            # create projection on the fly
-            proj = getattr(self, "_epi_proj", None)
-            if proj is None:
-                self._epi_proj = nn.Linear(self.feat_dim, 1).to(S.device)
-                proj = self._epi_proj
-            epi_bias = proj(epi_feat).reshape(B, N1, N2)  # (B, N1, N2)
-            S = S + epi_bias
+
+        # epi: (B, N1, N2) -- convert to a bias of same shape
+        # we pass epi as a scalar through pos_mlp by flattening and reshaping
+        # small trick: pos_mlp expects (B, L, 1) input; we process per-batch unfolded
+        B, N1, N2 = epi.shape
+        epi_flat = epi.reshape(B, -1, 1)  # (B, N1*N2, 1)
+        epi_feat = self.pos_mlp(epi_flat)  # (B, N1*N2, D)
+        # reduce epi_feat to a scalar bias per pair using a linear projection (learnable)
+        # create projection on the fly
+        # proj = getattr(self, "_epi_proj", None)
+        # if proj is None:
+        #     self._epi_proj = nn.Linear(self.feat_dim, 1).to(S.device)
+        #     proj = self._epi_proj
+
+        epi_bias = self._epi_proj(epi_feat).reshape(B, N1, N2)  # (B, N1, N2)
+        S = S + epi_bias
 
         # Row and column softmax probabilities
         P_row = F.softmax(S, dim=-1)  # left -> distribution over right for each left
@@ -212,7 +214,8 @@ model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4, use_sinkhorn=
 # load
 model_path = 'pair.pth'
 state_dict = torch.load(model_path, map_location=DEVICE)
-missing, unexpected = model.load_state_dict(state_dict, strict=False)
+model.load_state_dict(state_dict)
+quit()
 model.eval()
 
 loss_epo = 0
