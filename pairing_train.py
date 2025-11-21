@@ -10,14 +10,13 @@ from typing import Dict, Tuple
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def compute_F_batch(K1, R1, t1, K2, R2, t2):
-    B = K1.shape[0]
-    Fm = torch.zeros((B,3,3), device=K1.device, dtype=K1.dtype)
-    for b in range(B):
-        Rrel = R2[b] @ R1[b].T
-        trel = (t2[b] - Rrel @ t1[b]).reshape(3)
-        tx = torch.tensor([[0.0, -trel[2], trel[1]],[trel[2], 0.0, -trel[0]],[-trel[1], trel[0], 0.0]], device=K1.device, dtype=K1.dtype)
-        Fm[b] = torch.inverse(K2[b]).T @ tx @ Rrel @ torch.inverse(K1[b])
+def compute_F(K1, R1, t1, K2, R2, t2):
+    # epi = x_2.T @ Fm @ x_1
+    Fm = torch.zeros((3,3), device=K1.device, dtype=K1.dtype)
+    Rrel = R2 @ R1.T
+    trel = (t2 - Rrel @ t1).reshape(3)
+    tx = torch.tensor([[0.0, -trel[2], trel[1]],[trel[2], 0.0, -trel[0]],[-trel[1], trel[0], 0.0]], device=K1.device, dtype=K1.dtype)
+    Fm = torch.inverse(K2).T @ tx @ Rrel @ torch.inverse(K1)
     return Fm
 
 class SmallMLP(nn.Module):
@@ -27,12 +26,12 @@ class SmallMLP(nn.Module):
             nn.Linear(in_dim, hidden),
             nl(),
             nn.Linear(hidden, out_dim),
-            nl()
+            nl(),
+            nn.Linear(out_dim, out_dim)
         )
 
     def forward(self, x):
         return self.net(x)
-
 
 class CrossAttentionBlock(nn.Module):
     def __init__(self, d_model: int, nhead: int = 4, dropout: float = 0.0):
@@ -133,7 +132,9 @@ def matching_loss(
     P = torch.sigmoid(logits)
 
     # Binary Cross Entropy
-    loss_bce = F.binary_cross_entropy(P, M.float(), reduction='mean')
+    # loss_bce = F.binary_cross_entropy(P, M.float(), reduction='mean')
+    pos_weight = (M.numel() - M.sum()) / (M.sum() + 1e-8)
+    loss_bce = F.binary_cross_entropy_with_logits(logits, M.float(), pos_weight=pos_weight)
 
     # Epi Loss
     loss_epi = (P * epi).mean()
@@ -219,39 +220,38 @@ ds = PairsDataset(samples)
 dl = DataLoader(ds, batch_size = 1, collate_fn = collate_fn, shuffle = True)
 
 # model = CrossMatchModel(d_model = 64, epi_bias_scale = 0.3).to(DEVICE)
-model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4).to(DEVICE)
+# model = MatchNet(feat_dim=128, mlp_hidden=64, n_layers=2, nhead=4).to(DEVICE)
+model = MatchNet(feat_dim=256, n_layers=4).to(DEVICE)
+# model.load_state_dict(torch.load('pair.pth'))
 opt = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-for i in range(1000):
+for i in range(100):
     loss_epo = 0
     for batch in dl:
-        ptsL = batch['ptsL'][:,:,[1,0]].to(DEVICE)                  # (B, N1, 2)
-        ptsR = batch['ptsR'][:,:,[1,0]].to(DEVICE)                  # (B, N2, 2)
-        M = batch['M'].to(DEVICE)                                   # (B, N1, N2)
-        K1 = batch['K1'].to(DEVICE)
-        R1 = batch['R1'].to(DEVICE)
-        t1 = batch['t1'].to(DEVICE)
-        K2 = batch['K2'].to(DEVICE)
-        R2 = batch['R2'].to(DEVICE)
-        t2 = batch['t2'].to(DEVICE)
+        ptsL = batch['ptsL'][0,:,[1,0]].to(DEVICE)                      # (N1, 2)
+        ptsR = batch['ptsR'][0,:,[1,0]].to(DEVICE)                      # (N2, 2)
+        M = batch['M'][0].to(DEVICE)                                    # (N1, N2)
+        K1 = batch['K1'][0].to(DEVICE)
+        R1 = batch['R1'][0].to(DEVICE)
+        t1 = batch['t1'][0].to(DEVICE)
+        K2 = batch['K2'][0].to(DEVICE)
+        R2 = batch['R2'][0].to(DEVICE)
+        t2 = batch['t2'][0].to(DEVICE)
 
         # compute epi_dist per batch element (normalized)
         with torch.no_grad():
-            Fm = compute_F_batch(K1,R1,t1,K2,R2,t2)
-            B, N1, _ = ptsL.shape
-            _, N2, _ = ptsR.shape
-            epi = torch.zeros((B,N1,N2), device=DEVICE)
-            for b in range(B):
-                x1 = ptsL[b]
-                x2 = ptsR[b]
-                x1h = torch.cat([x1, torch.ones((N1,1), device=DEVICE)], dim = 1)
-                x2h = torch.cat([x2, torch.ones((N2,1), device=DEVICE)], dim = 1)
-                Fx1 = (Fm[b] @ x1h.T).T
-                Mpair = torch.abs(x2h @ Fx1.T)
-                epi[b] = Mpair.T
-            epi = epi / (epi.mean(dim = (1,2), keepdim = True)+1e-9)
+            Fm = compute_F(K1,R1,t1,K2,R2,t2)
+            N1, _ = ptsL.shape
+            N2, _ = ptsR.shape
+            epi = torch.zeros((N1,N2), device=DEVICE)
+            x1h = torch.cat([ptsL, torch.ones((N1,1), device=DEVICE)], dim = 1)
+            x2h = torch.cat([ptsR, torch.ones((N2,1), device=DEVICE)], dim = 1)
+            Fx1 = (Fm @ x1h.T).T
+            Mpair = torch.abs(x2h @ Fx1.T)
+            epi = Mpair.T
+            epi = epi / (epi.mean(dim = (0,1), keepdim = True)+1e-9)
 
-        out = model(ptsL, ptsR, epi)
+        out = model(ptsL.squeeze(0), ptsR.squeeze(0), epi.squeeze(0))
         logits = out["logits"]
         loss, comps = matching_loss(logits, epi, M)
 

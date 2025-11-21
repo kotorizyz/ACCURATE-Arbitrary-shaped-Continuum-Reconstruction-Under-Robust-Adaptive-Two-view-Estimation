@@ -10,7 +10,7 @@ from typing import Dict, Tuple
 import numpy as np
 import open3d as o3d
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
 
 def compute_F_batch(K1, R1, t1, K2, R2, t2):
     B = K1.shape[0]
@@ -193,6 +193,28 @@ def make_sample(dir = ''):
     data_i = torch.load(dir)
     return {'ptsL':data_i['x1'], 'ptsR':data_i['x2'], 'K1':data_i['K1'], 'R1':data_i['RT1'][:,:3], 't1':data_i['RT1'][:,3], 'K2':data_i['K2'], 'R2':data_i['RT2'][:,:3], 't2':data_i['RT2'][:,3], 'M':data_i['M_ij']}
 
+def dynamic_match_matrix(P: torch.Tensor, keep_ratio: float = 0.05, row_topk: int = 3):
+
+    N1, N2 = P.shape
+    flat = P.flatten()
+    k_global = max(1, int(len(flat) * keep_ratio))
+    # 取全局Top-K最小值作为阈值
+    tau = torch.topk(flat, k_global).values.min()
+
+    # Step1: 高置信度掩码
+    mask_high = (P >= tau)
+
+    # Step2: 每行局部Top-K
+    topk_vals, topk_idx = torch.topk(P, min(row_topk, N2), dim=-1)
+
+    # 初始化二值矩阵
+    M = torch.zeros_like(P)
+    for i in range(N1):
+        for j in topk_idx[i]:
+            if mask_high[i, j]:  # 同时满足全局与局部条件
+                M[i, j] = 1.0
+
+    return M, tau
 
 samples = [make_sample(f'dataset/processed_data/data_{i+1}.pt') for i in range(100, 135)]
 ds = PairsDataset(samples)
@@ -236,20 +258,27 @@ with torch.no_grad():
         out = model(ptsL, ptsR, epi)
         logits = out["logits"]
         P = torch.sigmoid(logits)
+        # M, _ = dynamic_match_matrix(P[0], keep_ratio=0.1, row_topk=5)
+        # M = M.unsqueeze(0)
+        # print(M.shape)
+
+
+        # check point
         # for i in range(10):
         #     print(torch.sort(P[0,i], descending=True).values[:int(M[0,i].sum().item())+3].cpu().numpy())
         #     idx = torch.sort(P[0,i], descending=True).indices[:int(M[0,i].sum().item())+3].cpu().numpy()
         #     print(M[0,i,idx].cpu().numpy())
         #     print('-------')
         # quit()
+        # =============================
 
         pts = []
         for i in range(N1):
             # print(ptsL[0,i], ptsR[0,torch.argmax(P[0,i])], M[0,i,torch.argmax(P[0,i])])
             idxL = i
-            idxR = torch.argwhere(P[0,i]>0.2)
-            idxR = torch.argwhere(M[0,i]>0.5)
-            print(int(M[0,i].sum().item()), P[0,i, idxR].sum().item() / P[0,i].sum().item())
+            idxR = torch.argwhere(P[0,i]>0.97)
+            # idxR = torch.argwhere(M[0,i]>0.5)
+            # print(int(M[0,i].sum().item()), P[0,i, idxR].sum().item() / P[0,i].sum().item())
             # idxR = torch.argmax(P[0,i], dim=0).item()
             for idx in idxR:
                 idx = idx.item()

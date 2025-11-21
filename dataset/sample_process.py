@@ -31,25 +31,19 @@ for file in files:
 
     # camera parameter
     para = json.load(open(file_path + '/camera_params.json'))
-    # intrinsic_cam1 = np.array(para["cam1"]["intrinsic"])              # (3, 3)
-    intrinsic_cam1 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
+    intrinsic_cam1 = np.array(para["cam1"]["intrinsic"])              # (3, 3)
+    # intrinsic_cam1 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
     extrinsic_cam1 = np.array(para["cam1"]["extrinsic"])[:3]            # (3, 4)
-    # intrinsic_cam2 = np.array(para["cam2"]["intrinsic"])              # (3, 3)
-    intrinsic_cam2 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
+    intrinsic_cam2 = np.array(para["cam2"]["intrinsic"])              # (3, 3)
+    # intrinsic_cam2 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
     extrinsic_cam2 = np.array(para["cam2"]["extrinsic"])[:3]            # (3, 4)
 
     # 3d point cloud
     point_3d = o3d.io.read_point_cloud(file_path + '/curve_points.ply')
     point_3d = np.asarray(point_3d.points)
     N = point_3d.shape[0]
-
-    # mask
-    mask1 = skeletonize(cv2.imread(file_path + '/mask_cam1.png', cv2.IMREAD_GRAYSCALE) > 10).astype(np.uint8)
-    mask2 = skeletonize(cv2.imread(file_path + '/mask_cam2.png', cv2.IMREAD_GRAYSCALE) > 10).astype(np.uint8)
-    if(mask1.shape != mask2.shape):
-        print('Camera Parameter Error')
-        quit()
-    image_size = mask1.shape                                    # (H, W)
+    
+    image_size = (2048, 512)
 
     # project back
     uv_cam1 = world_to_pixel(point_3d, intrinsic_cam1, extrinsic_cam1)
@@ -91,8 +85,6 @@ for file in files:
     K2 = torch.tensor(intrinsic_cam2, dtype=torch.float32)      # (3, 3)
     RT2 = torch.tensor(extrinsic_cam2, dtype=torch.float32)     # (3, 4)
     image_size = torch.tensor(image_size, dtype=torch.int32)    # (2, )
-    mask1 = torch.tensor(img1, dtype=torch.uint8)               # (H, W)
-    mask2 = torch.tensor(img2, dtype=torch.uint8)               # (H, W)
     x1 = torch.tensor(x1, dtype=torch.int32)                    # (N1, 2)
     x2 = torch.tensor(x2, dtype=torch.int32)                    # (N2, 2)
     M_ij = torch.tensor(M_ij, dtype=torch.uint8)                # (N1, N2)
@@ -105,8 +97,6 @@ for file in files:
         'RT1': RT1,
         'RT2': RT2,
         'image_size': image_size,
-        'mask1' : mask1,
-        'mask2' : mask2,
         'x1' : x1,
         'x2' : x2,
         'M_ij' : M_ij
