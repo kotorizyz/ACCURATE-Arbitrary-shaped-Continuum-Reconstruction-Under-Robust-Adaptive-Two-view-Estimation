@@ -4,6 +4,7 @@ from skimage.morphology import skeletonize
 from skimage.draw import line
 from scipy import linalg
 import torch
+import open3d as o3d
 
 def compute_stereo_params(K1,K2,R1,R2,t1,t2):
     R = R2 @ R1.T
@@ -22,12 +23,16 @@ def compute_stereo_params(K1,K2,R1,R2,t1,t2):
     # P1 = K1 @ np.hstack((np.eye(3), np.zeros((3,1))))
     # P2 = K2 @ np.hstack((R, T.reshape(3,1)))
 
-    P1 = K1 @ np.concatenate((K1, R1), axis=1)
-    P2 = K2 @ np.concatenate((K2, R2), axis=1)
-    print(K1, R1)
-    quit()
-    
+    P1 = K1 @ np.concatenate((R1, t1[:,None]), axis=1)
+    P2 = K2 @ np.concatenate((R2, t2[:,None]), axis=1)
     return R, T, E, F, P1, P2
+
+def draw_epiline(img, line):
+    a, b, c = line
+    h, w = img.shape[:2]
+    x0, y0 = 0, int(-c / b) if b != 0 else 0
+    x1, y1 = w, int(-(c + a * w) / b) if b != 0 else h
+    return cv2.line(img, (x0,y0), (x1,y1), 1, 1)
 
 def remove_duplicates_keep_last(arr):
     seen = set()
@@ -158,8 +163,73 @@ def traverse_curve(mask, window_size=5, r_min=1, r_max=2, gap_threshold=3):
         visited.add(p)
     return sequence
 
+
+def dp_left_right_matching(epi, tau=2):
+    N1, N2 = epi.shape
+
+    candidates = [[] for _ in range(N1)]
+    for i in range(N1):
+        row = epi[i]
+        for j in range(N2-1):
+            v0, v1 = row[j], row[j+1]
+            if v0 * v1 <= 0:
+                denom = v1 - v0
+                t = -v0 / denom if denom != 0 else 0.5
+                j_frac = j + np.clip(t, 0.0, 1.0)
+                score = -abs(v0 + t*(v1-v0))
+                candidates[i].append((j_frac, score))
+        small_idxs = np.where(np.abs(row) <= tau)[0]
+        for j in small_idxs:
+            candidates[i].append((float(j), -abs(row[j])))
+
+        if len(candidates[i]) == 0:
+            j_min = np.argmin(np.abs(row))
+            candidates[i].append((float(j_min), -abs(row[j_min])))
+
+        candidates[i].sort(key=lambda x: x[0])
+
+    dp = [dict() for _ in range(N1)]
+    for k, (j, score) in enumerate(candidates[0]):
+        dp[0][k] = (score, -1)
+
+    for i in range(1, N1):
+        for k, (j, score) in enumerate(candidates[i]):
+            best = None
+            for prev_k, (prev_score, _) in dp[i-1].items():
+                prev_j = candidates[i-1][prev_k][0]
+                if j >= prev_j:
+                    total_score = prev_score + score
+                    if (best is None) or (total_score > best[0]):
+                        best = (total_score, prev_k)
+            if best is None:
+                if len(dp[i-1]) > 0:
+                    prev_k, (prev_score, _) = min(
+                        dp[i-1].items(),
+                        key=lambda item: abs(candidates[i][k][0] - candidates[i-1][item[0]][0])
+                    )
+                    total_score = prev_score + score
+                    best = (total_score, prev_k)
+                else:
+                    best = (score, -1)
+            dp[i][k] = best
+
+    if len(dp[N1-1]) == 0:
+        return []
+    last_k = max(dp[N1-1], key=lambda k: dp[N1-1][k][0])
+    matches = []
+    for i in reversed(range(N1)):
+        j = candidates[i][last_k][0]
+        matches.append((i, int(round(j))))
+        _, last_k = dp[i][last_k]
+        if last_k == -1:
+            break
+    matches.reverse()
+    return matches
+
+
 H, W = 2048, 512
 num_rec = 1
+epsilon = 3
 pts_L = []
 pts_R = []
 param = []
@@ -186,12 +256,13 @@ pts_order_L = []
 for i in range(len(pts_L)):
     img = np.zeros((H,W))
     img[pts_L[i][:,1], pts_L[i][:,0]] = 1
+    # cv2.imwrite('cam1.png', img*255)
     seq = traverse_curve(img, window_size=5, r_min=5, r_max=10, gap_threshold=3)
     # mask = np.zeros((H,W))
     # for i in range(len(seq)):
     #     mask[seq[i][0], seq[i][1]] = 255
-    #     if i % 50 == 0:
-    #         cv2.imwrite(f"{i / 25}.png", mask)
+    #     if i % 10 == 0:
+    #         cv2.imwrite(f"tmp/{i / 10}.png", mask)
     # quit()
     pts_order_L.append(seq)
     # print(len(pts_order_L), len(pts_order_L[0]))
@@ -200,19 +271,76 @@ pts_order_R = []
 for i in range(len(pts_R)):
     img = np.zeros((H,W))
     img[pts_R[i][:,1], pts_R[i][:,0]] = 1
+    # cv2.imwrite('cam2.png', img*255)
     seq = traverse_curve(img, window_size=5, r_min=5, r_max=10, gap_threshold=3)
+    # mask = np.zeros((H,W))
+    # for i in range(len(seq)):
+    #     mask[seq[i][0], seq[i][1]] = 255
+    #     if i % 50 == 0:
+    #         cv2.imwrite(f"{i / 25}.png", mask)
+    # quit()
     pts_order_R.append(seq)
 
 # List: pts_order_L, pts_order_R, param
 for num_guidewire in range(len(pts_order_L)):
-    prev_idx_L = -1
-    prev_idx_R = -1
-    for idx_L in range(len(pts_order_L[num_guidewire])):
-        uv_L = [pts_order_L[num_guidewire][0], pts_order_L[num_guidewire][1]]
-        K1 = param[num_guidewire]['K1']
-        K2 = param[num_guidewire]['K2']
-        R1 = param[num_guidewire]['R1']
-        R2 = param[num_guidewire]['R2']
-        t1 = param[num_guidewire]['t1']
-        t2 = param[num_guidewire]['t2']
-        compute_stereo_params(K1,K2,R1,R2,t1,t2)
+    pts_L = [[pts_order_L[num_guidewire][i][0], pts_order_L[num_guidewire][i][1]] for i in range(len(pts_order_L[num_guidewire]))]
+    pts_R = [[pts_order_R[num_guidewire][i][0], pts_order_R[num_guidewire][i][1]] for i in range(len(pts_order_R[num_guidewire]))]
+    pts_L = np.array(pts_L)
+    pts_R = np.array(pts_R)
+    prev_idx_L = 0
+    prev_idx_R = 0
+    pts_3d = []
+
+    K1 = param[num_guidewire]['K1']
+    K2 = param[num_guidewire]['K2']
+    R1 = param[num_guidewire]['R1']
+    R2 = param[num_guidewire]['R2']
+    t1 = param[num_guidewire]['t1']
+    t2 = param[num_guidewire]['t2']
+    R, T, E, F, P1, P2 = compute_stereo_params(K1,K2,R1,R2,t1,t2)
+
+    line_right = cv2.computeCorrespondEpilines(pts_L[:,::-1], 1, F).reshape(-1, 3)
+    N1 = line_right.shape[0]
+    N2 = pts_R.shape[0]
+    epi = np.zeros((N1, N2), dtype=np.float32)
+    for i in range(N1):
+        a, b, c = line_right[i]
+        xs = pts_R[:,1]
+        ys = pts_R[:,0]
+        num = a*xs + b*ys + c
+        denom = np.sqrt(a*a + b*b)
+        epi[i] = num / denom
+    
+    matches = dp_left_right_matching(epi)
+
+    idx_L_prev = 0
+    idx_R_prev = 0
+    max_dlt = 0
+    num_pair = len(matches)
+    for i in range(num_pair):
+        if(matches[i][0] >= pts_L.shape[0]-10 or matches[i][1] >= pts_R.shape[0]-10):
+            break
+        idx_L = matches[i][0]
+        idx_R = matches[i][1]
+        dlt_L = idx_L - idx_L_prev
+        dlt_R = idx_R - idx_R_prev
+
+        if dlt_R > 1:
+            for j in range(1, dlt_R):
+                idx_R_interp = idx_R_prev + j
+                pt_l = np.array(pts_L[idx_L][::-1], dtype=np.float32).reshape(2, 1)
+                pt_r = np.array(pts_R[idx_R_interp][::-1], dtype=np.float32).reshape(2, 1)
+                points4D = cv2.triangulatePoints(P1, P2, pt_l, pt_r)
+                pt_prev_3d = (points4D[:3] / points4D[3]).flatten()
+                pts_3d.append(pt_prev_3d)
+
+        pt_l = np.array(pts_L[idx_L][::-1], dtype=np.float32).reshape(2, 1)
+        pt_r = np.array(pts_R[idx_R][::-1], dtype=np.float32).reshape(2, 1)
+        points4D = cv2.triangulatePoints(P1, P2, pt_l, pt_r)
+        pt_prev_3d = (points4D[:3] / points4D[3]).flatten()
+        pts_3d.append(pt_prev_3d)
+        idx_L_prev = idx_L
+        idx_R_prev = idx_R
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts_3d)
+    o3d.io.write_point_cloud("test.ply", pcd)

@@ -31,11 +31,13 @@ for file in files:
 
     # camera parameter
     para = json.load(open(file_path + '/camera_params.json'))
-    intrinsic_cam1 = np.array(para["cam1"]["intrinsic"])              # (3, 3)
-    # intrinsic_cam1 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
+    
+    # intrinsic_cam1 = np.array(para["cam1"]["intrinsic"])              # (3, 3)
+    intrinsic_cam1 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
     extrinsic_cam1 = np.array(para["cam1"]["extrinsic"])[:3]            # (3, 4)
-    intrinsic_cam2 = np.array(para["cam2"]["intrinsic"])              # (3, 3)
-    # intrinsic_cam2 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
+
+    # intrinsic_cam2 = np.array(para["cam2"]["intrinsic"])              # (3, 3)
+    intrinsic_cam2 = np.array([[1988, 0, 256],[0, 1988, 1024],[0,0,1]])
     extrinsic_cam2 = np.array(para["cam2"]["extrinsic"])[:3]            # (3, 4)
 
     # 3d point cloud
