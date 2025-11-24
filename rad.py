@@ -24,7 +24,7 @@ def compute_stereo_params(K1,K2,R1,R2,t1,t2):
 
     P1 = K1 @ np.concatenate((K1, R1), axis=1)
     P2 = K2 @ np.concatenate((K2, R2), axis=1)
-    print(np.concatenate((K1, R1), axis=1))
+    print(K1, R1)
     quit()
     
     return R, T, E, F, P1, P2
@@ -159,11 +159,11 @@ def traverse_curve(mask, window_size=5, r_min=1, r_max=2, gap_threshold=3):
     return sequence
 
 H, W = 2048, 512
-num_train = 1
+num_rec = 1
 pts_L = []
 pts_R = []
 param = []
-for i in range(num_train):
+for i in range(num_rec):
     data_i = torch.load(f'./dataset/processed_data/data_{i+1}.pt')
     img = np.zeros((H, W))
 
@@ -201,14 +201,7 @@ for i in range(len(pts_R)):
     img = np.zeros((H,W))
     img[pts_R[i][:,1], pts_R[i][:,0]] = 1
     seq = traverse_curve(img, window_size=5, r_min=5, r_max=10, gap_threshold=3)
-    # mask = np.zeros((H,W))
-    # for i in range(len(seq)):
-    #     mask[seq[i][0], seq[i][1]] = 255
-    #     if i % 50 == 0:
-    #         cv2.imwrite(f"{i / 25}.png", mask)
-    # quit()
     pts_order_R.append(seq)
-    # print(len(pts_order_R), len(pts_order_R[0]))
 
 # List: pts_order_L, pts_order_R, param
 for num_guidewire in range(len(pts_order_L)):
