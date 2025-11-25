@@ -230,6 +230,7 @@ def dp_left_right_matching(epi, tau=2):
 H, W = 2048, 512
 num_rec = 1
 epsilon = 3
+pts_3d_gt = []
 pts_L = []
 pts_R = []
 param = []
@@ -251,6 +252,8 @@ for i in range(num_rec):
     t1 = data_i['RT1'][:3,3].numpy()
     t2 = data_i['RT2'][:3,3].numpy()
     param.append({'K1': K1, 'K2': K2, 'R1': R1, 'R2': R2, 't1': t1, 't2': t2})
+
+    pts_3d_gt.append(data_i['points'].numpy())
 
 pts_order_L = []
 for i in range(len(pts_L)):
@@ -343,4 +346,8 @@ for num_guidewire in range(len(pts_order_L)):
         idx_R_prev = idx_R
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pts_3d)
-    o3d.io.write_point_cloud("test.ply", pcd)
+    o3d.io.write_point_cloud("rec.ply", pcd)
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts_3d_gt[num_guidewire])
+    o3d.io.write_point_cloud("gt.ply", pcd)
