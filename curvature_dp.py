@@ -245,14 +245,14 @@ def dp_left_right_matching(epi, tau=2):
 if __name__ == '__main__':
 
     H, W = 2048, 512
-    num_rec = 1
+    num_rec = 10
     epsilon = 3
     pts_3d_gt = []
     pts_L = []
     pts_R = []
     param = []
     for i in range(num_rec):
-        data_i = torch.load(f'./dataset/processed_data/data_{i+2}.pt')
+        data_i = torch.load(f'./dataset/processed_data/data_{i+1}.pt')
         img = np.zeros((H, W))
 
         uv1 = np.rint(data_i['uv1']).numpy().astype(np.int32)
