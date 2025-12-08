@@ -251,6 +251,8 @@ if __name__ == '__main__':
     pts_L = []
     pts_R = []
     param = []
+    mask1 = []
+    mask2 = []
     for i in range(num_rec):
         data_i = torch.load(f'./dataset/processed_data/data_{i+1}.pt')
         img = np.zeros((H, W))
@@ -268,50 +270,28 @@ if __name__ == '__main__':
         t2 = data_i['RT2'][:3,3].numpy()
         param.append({'K1': K1, 'K2': K2, 'R1': R1, 'R2': R2, 't1': t1, 't2': t2})
 
+        mask1.append(data_i['mask1'].numpy())
+        mask2.append(data_i['mask2'].numpy())
+
         pts_3d_gt.append(data_i['points'].numpy())
 
     pts_order_L = []
     for i in range(len(pts_L)):
-        img = np.zeros((H,W))
-        # img[pts_L[i][:,1], pts_L[i][:,0]] = 1
-        for j in range(len(pts_L[i]) - 1):
-            x1, y1 = pts_L[i][j]
-            x2, y2 = pts_L[i][j+1]
-            cv2.line(img, (x1, y1), (x2, y2), color=1, thickness=1)
-
+        img = mask1[i]
         seq = traverse_curve(img, window_size=10, r_min=10, r_max=15, gap_threshold=3)
-        # mask = np.zeros((H,W))
-        # for i in range(len(seq)):
-        #     mask[seq[i][0], seq[i][1]] = 255
-        #     if i % 10 == 0:
-        #         cv2.imwrite(f"order/{i}.png", mask)
-        # quit()
-        # print(seq)
         pts_order_L.append(seq)
-        # print(len(seq))
-        # print(len(pts_order_L), len(pts_order_L[0]))
 
     pts_order_R = []
     for i in range(len(pts_R)):
-        img = np.zeros((H,W))
-        # img[pts_R[i][:,1], pts_R[i][:,0]] = 1
-        for j in range(len(pts_R[i]) - 1):
-            x1, y1 = pts_R[i][j]
-            x2, y2 = pts_R[i][j+1]
-            cv2.line(img, (x1, y1), (x2, y2), color=1, thickness=1)
-        # img[1055, 175] = 2
-        # cv2.imwrite('cam2.png', img*120)
-        # quit()
+        img = mask2[i]
         seq = traverse_curve(img, window_size=10, r_min=10, r_max=15, gap_threshold=3)
+        pts_order_R.append(seq)
+
         # mask = np.zeros((H,W))
         # for i in range(len(seq)):
         #     mask[seq[i][0], seq[i][1]] = 255
         #     if i % 10 == 0:
         #         cv2.imwrite(f"order/{i}.png", mask)
-        # quit()
-        # print(seq)
-        pts_order_R.append(seq)
-        # print(len(seq))
         # quit()
 
     # List: pts_order_L, pts_order_R, param
@@ -377,7 +357,6 @@ if __name__ == '__main__':
             pts_3d.append(pt_prev_3d)
             idx_L_prev = idx_L
             idx_R_prev = idx_R
-
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pts_3d)
         o3d.io.write_point_cloud(f"output/rec_{num_guidewire}.ply", pcd)

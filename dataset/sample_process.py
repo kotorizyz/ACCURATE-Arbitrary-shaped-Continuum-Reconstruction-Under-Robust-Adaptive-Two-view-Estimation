@@ -51,28 +51,48 @@ for file in files:
     uv_cam1 = world_to_pixel(point_3d, intrinsic_cam1, extrinsic_cam1)
     uv_cam2 = world_to_pixel(point_3d, intrinsic_cam2, extrinsic_cam2)
 
-    img1 = np.zeros(image_size).astype(np.uint8)
-    u1 = uv_cam1[:,0].astype(np.int32)
-    v1 = uv_cam1[:,1].astype(np.int32)
-    img1[v1, u1] = 1
+    # mask
+    mask1 = np.zeros(image_size)
+    mask1[np.rint(uv_cam1[:,1]).astype(np.int32), np.rint(uv_cam1[:,0]).astype(np.int32)] = 1
+    for j in range(len(uv_cam1) - 1):
+        x1, y1 = np.rint(uv_cam1[j]).astype(np.int32)
+        x2, y2 = np.rint(uv_cam1[j+1]).astype(np.int32)
+        cv2.line(mask1, (x1, y1), (x2, y2), color=1, thickness=1)
 
-    img2 = np.zeros(image_size).astype(np.uint8)
-    u2 = uv_cam2[:,0].astype(np.int32)
-    v2 = uv_cam2[:,1].astype(np.int32)
-    img2[v2, u2] = 1
+    mask2 = np.zeros(image_size)
+    mask2[np.rint(uv_cam2[:,1]).astype(np.int32), np.rint(uv_cam2[:,0]).astype(np.int32)] = 1
+    for j in range(len(uv_cam2) - 1):
+        x1, y1 = np.rint(uv_cam2[j]).astype(np.int32)
+        x2, y2 = np.rint(uv_cam2[j+1]).astype(np.int32)
+        cv2.line(mask2, (x1, y1), (x2, y2), color=1, thickness=1)
+    
+    # imgs
+    img1 = cv2.imread(file_path + '/mask_cam1.png', cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread(file_path + '/mask_cam2.png', cv2.IMREAD_GRAYSCALE)
+
+    # img1 = np.zeros(image_size).astype(np.uint8)
+    # u1 = uv_cam1[:,0].astype(np.int32)
+    # v1 = uv_cam1[:,1].astype(np.int32)
+    # img1[v1, u1] = 1
+    
+
+    # img2 = np.zeros(image_size).astype(np.uint8)
+    # u2 = uv_cam2[:,0].astype(np.int32)
+    # v2 = uv_cam2[:,1].astype(np.int32)
+    # img2[v2, u2] = 1
     
     # M_ij Mat
-    x1 = np.argwhere(img1 > 0)                                  # (N1, 2)
-    x2 = np.argwhere(img2 > 0)                                  # (N2, 2)
-    M_ij = np.zeros((x1.shape[0], x2.shape[0])).astype(np.uint8)   # (N1, N2)
-    for i in range(N):
-        u1 = uv_cam1[i,0].astype(np.int32)
-        v1 = uv_cam1[i,1].astype(np.int32)
-        u2 = uv_cam2[i,0].astype(np.int32)
-        v2 = uv_cam2[i,1].astype(np.int32)
-        idx1 = np.where((x1[:,0]==v1) & (x1[:,1]==u1))[0][0]
-        idx2 = np.where((x2[:,0]==v2) & (x2[:,1]==u2))[0][0]
-        M_ij[idx1, idx2] = 1
+    # x1 = np.argwhere(img1 > 0)                                  # (N1, 2)
+    # x2 = np.argwhere(img2 > 0)                                  # (N2, 2)
+    # M_ij = np.zeros((x1.shape[0], x2.shape[0])).astype(np.uint8)   # (N1, N2)
+    # for i in range(N):
+    #     u1 = uv_cam1[i,0].astype(np.int32)
+    #     v1 = uv_cam1[i,1].astype(np.int32)
+    #     u2 = uv_cam2[i,0].astype(np.int32)
+    #     v2 = uv_cam2[i,1].astype(np.int32)
+    #     idx1 = np.where((x1[:,0]==v1) & (x1[:,1]==u1))[0][0]
+    #     idx2 = np.where((x2[:,0]==v2) & (x2[:,1]==u2))[0][0]
+    #     M_ij[idx1, idx2] = 1
 
     # img = mask1 * 100 + img1
     # cv2.imwrite('img1.png', img1)
@@ -87,9 +107,13 @@ for file in files:
     K2 = torch.tensor(intrinsic_cam2, dtype=torch.float32)      # (3, 3)
     RT2 = torch.tensor(extrinsic_cam2, dtype=torch.float32)     # (3, 4)
     image_size = torch.tensor(image_size, dtype=torch.int32)    # (2, )
-    x1 = torch.tensor(x1, dtype=torch.int32)                    # (N1, 2)
-    x2 = torch.tensor(x2, dtype=torch.int32)                    # (N2, 2)
-    M_ij = torch.tensor(M_ij, dtype=torch.uint8)                # (N1, N2)
+    mask1 = torch.tensor(mask1, dtype=torch.int32)              # (H, W)
+    mask2 = torch.tensor(mask2, dtype=torch.int32)              # (H, W)
+    img1 = torch.tensor(img1, dtype=torch.float32)              # (H, W)
+    img2 = torch.tensor(img2, dtype=torch.float32)              # (H, W)
+    # x1 = torch.tensor(x1, dtype=torch.int32)                    # (N1, 2)
+    # x2 = torch.tensor(x2, dtype=torch.int32)                    # (N2, 2)
+    # M_ij = torch.tensor(M_ij, dtype=torch.uint8)                # (N1, N2)
     data = {
         'uv1': uv1,
         'uv2': uv2,
@@ -99,8 +123,12 @@ for file in files:
         'RT1': RT1,
         'RT2': RT2,
         'image_size': image_size,
-        'x1' : x1,
-        'x2' : x2,
-        'M_ij' : M_ij
+        'mask1': mask1,
+        'mask2': mask2,
+        'img1': img1,
+        'img2': img2
+        # 'x1' : x1,
+        # 'x2' : x2,
+        # 'M_ij' : M_ij
     }
     torch.save(data, f'dataset/processed_data/data_{file_idx}.pt')
