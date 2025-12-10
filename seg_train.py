@@ -9,7 +9,8 @@ H, W = 2048, 512
 
 batch_size = 1
 num_epochs = 300
-device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+device = torch.device('cpu')
 
 img_train = torch.zeros((2*num_train, 1, H, W), dtype=torch.float32)
 img_eval = torch.zeros((2*num_eval, 1, H, W), dtype=torch.float32)

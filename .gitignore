@@ -6,7 +6,7 @@ dataset/dataset_3/
 dataset/dataset4/
 dataset/processed_data/
 dataset/processed_data_2/
-output.log
+train.log
 unet/
 output/
 order/
