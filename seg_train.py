@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
+import cv2
 
 from model import SelfAttentionUNet, Dataset2D
 
@@ -9,8 +10,8 @@ H, W = 2048, 512
 
 batch_size = 1
 num_epochs = 300
-# device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
-device = torch.device('cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device('cpu')
 
 img_train = torch.zeros((2*num_train, 1, H, W), dtype=torch.float32)
 img_eval = torch.zeros((2*num_eval, 1, H, W), dtype=torch.float32)
@@ -72,4 +73,4 @@ for epoch in range(num_epochs):
             loss_epoch_eval += val_loss.item()
     print(f"Epoch {epoch}:", loss_epoch_train / num_train, loss_epoch_eval / num_eval)
 
-torch.save(model.state_dict(), 'unet.pth')
+torch.save(model.state_dict(), './dataset/unet.pth')

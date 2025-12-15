@@ -254,8 +254,7 @@ if __name__ == '__main__':
     mask1 = []
     mask2 = []
     for i in range(num_rec):
-        data_i = torch.load(f'./dataset/processed_data/data_{i+1}.pt')
-        img = np.zeros((H, W))
+        data_i = torch.load(f'./dataset/processed_data/data_{i+111}.pt')
 
         uv1 = np.rint(data_i['uv1']).numpy().astype(np.int32)
         uv2 = np.rint(data_i['uv2']).numpy().astype(np.int32)
@@ -270,8 +269,11 @@ if __name__ == '__main__':
         t2 = data_i['RT2'][:3,3].numpy()
         param.append({'K1': K1, 'K2': K2, 'R1': R1, 'R2': R2, 't1': t1, 't2': t2})
 
-        mask1.append(data_i['mask1'].numpy())
-        mask2.append(data_i['mask2'].numpy())
+        mask1.append(cv2.imread(f'./dataset/processed_data/pred_{i+111}_0.png', cv2.IMREAD_GRAYSCALE))
+        mask2.append(cv2.imread(f'./dataset/processed_data/pred_{i+111}_1.png', cv2.IMREAD_GRAYSCALE))
+
+        # mask1.append(data_i['mask1'].numpy())
+        # mask2.append(data_i['mask2'].numpy())
 
         pts_3d_gt.append(data_i['points'].numpy())
 
