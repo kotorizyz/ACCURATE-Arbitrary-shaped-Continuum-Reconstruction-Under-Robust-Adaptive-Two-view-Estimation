@@ -10,6 +10,14 @@ dataset/processed_data/
 dataset/processed_data_2/
 dataset/unet.pth
 
+ctdataset/SE0
+ctdataset/SE1
+ctdataset/SE2
+ctdataset/SE3
+ctdataset/SE4
+ctdataset/SE5
+ctdataset/SE6
+
 output/
 
 train.log
