@@ -75,32 +75,50 @@ def calculate_projection_matrix(
 
 def project_points(points_xyz, P):
     N = points_xyz.shape[0]
-    pts_h = np.hstack([points_xyz, np.ones((N,1))])  # (N,4)
-    proj = (P @ pts_h.T).T                            # (N,3)
+    pts_h = np.hstack([points_xyz, np.ones((N,1))])
+    proj = (P @ pts_h.T).T
 
     u = proj[:, 0] / proj[:, 2]
     v = proj[:, 1] / proj[:, 2]
     return np.stack([u, v], axis=1)
 
+
 file = 'ctdataset/SE5/IM1'
 dcm = pydicom.dcmread(file)
+
 num_frames = dcm.NumberOfFrames
 num_mats = len(dcm[0x00211009].value)
+
 
 file_off = 'ctdataset/SE0/IM0'
 dcm_off  = pydicom.dcmread(file_off)
 mat_off = np.array(dcm_off[0x00289520].value).reshape(4,4)[:3,3]
+# mat_off = np.array([-58.5, -68.599998, 690.5])
+mat_off = np.array([-57.3, -68.599998, 690.5])
 
 angle1 = np.array([dcm[0x00191001].value]*num_frames) + dcm[0x00191197].value
 angle2 = np.array([dcm[0x00191002].value]*num_frames) + dcm[0x00191198].value
 angle3 = np.array([dcm[0x00191003].value]*num_frames) + dcm[0x00191199].value
+dlt_angle1 = (angle1[-1] - angle1[0]) / (num_frames - 1)
+dlt_angle2 = (angle2[-1] - angle2[0]) / (num_frames - 1)
+dlt_angle3 = (angle3[-1] - angle3[0]) / (num_frames - 1)
+for i in range(num_frames):
+    angle1[i] = angle1[0] + i * dlt_angle1
+    angle2[i] = angle2[0] + i * dlt_angle2
+    angle3[i] = angle3[0] + i * dlt_angle3
 
-# P_list = []
-# for item in dcm[0x0021100b]:
-#     vals = list(map(float, item[0x0021100c].value))
-#     P = np.array(vals).reshape(3,4)
-#     P_list.append(P)
-# P_list = P_list[3:294]
+P_list = []
+for item in dcm[0x0021100b]:
+    vals = list(map(float, item[0x0021100c].value))
+    P = np.array(vals).reshape(3,4)
+    P[:3, :3] *= 10.0
+    P = P[:,[1,0,2,3]]
+    P_list.append(P)
+P_list = np.array(P_list[3:294])
+
+# S = get_source_positions(P_list)[:,[1,0,2]]
+# print(fit_rotation_circle(S))
+# quit()
 
 # S_proj = np.zeros((num_frames, 3))
 # for i, P in enumerate(P_list):
@@ -113,25 +131,33 @@ points3D = o3d.io.read_point_cloud('ctdataset/SE6/Segment_1.ply')
 # points3D = o3d.io.read_point_cloud('ctdataset/Segment.ply')
 points = np.asarray(points3D.points)  # (N, 3)
 # print(points)
-
 points += mat_off[None, :]
 
+
+
 H, W = 500, 500
-for i in range(num_frames):
+for i in [0,145,290]:
     img = imgs[i]
-    P = calculate_projection_matrix(angle1[i], angle2[i], angle3[i])
-    if(angle2[i] < -90 or angle2[i] > 90):
-        continue
+
+    # if angle2[i] < -90 or angle2[i] > 90:
+    #     continue
+    # P = calculate_projection_matrix(angle1[i], angle2[i], angle3[i])
+    # point2D = project_points(points, P) / 2
+
+    P = P_list[i]
     point2D = project_points(points, P) / 2
+
     mask = (
         (point2D[:,0] >= 0) & (point2D[:,0] < W) &
         (point2D[:,1] >= 0) & (point2D[:,1] < H)
     )
     point2D = point2D[mask]
 
-    gt_img = imgs[i]
+    gt_img = img
     gt_img = (gt_img - gt_img.min()) / (gt_img.max() - gt_img.min()) * 255.0
-    gt_img[H - point2D[:,1].astype(np.int32), point2D[:,0].astype(np.int32)] = 255
+    for point2d in point2D:
+        if point2d[0] >=0 and point2d[0] <= W - 1 and point2d[1] >= 1 and point2d[1] <= H:
+            gt_img[H - point2d[1].astype(np.int32), point2d[0].astype(np.int32)] = 255
     cv2.imwrite(f'tmp/gt_{i}.png', gt_img)
 
 # points = np.array([[0,0,0]])
