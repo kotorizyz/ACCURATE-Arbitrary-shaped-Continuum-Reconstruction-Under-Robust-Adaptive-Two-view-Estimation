@@ -82,19 +82,28 @@ def project_points(points_xyz, P):
     v = proj[:, 1] / proj[:, 2]
     return np.stack([u, v], axis=1)
 
+# 0,1,2,3,4
+idx_guidewire = 0
 
-file = 'ctdataset/SE5/IM1'
+if idx_guidewire == 0:
+    file = f'ctdataset/SE5/IM1'
+elif idx_guidewire == 1:
+    file = f'ctdataset/SE5/IM13'
+elif idx_guidewire == 2:
+    file = f'ctdataset/SE5/IM21'
+elif idx_guidewire == 3:
+    file = f'ctdataset/SE5/IM28'
+elif idx_guidewire == 4:
+    file = f'ctdataset/SE5/IM35'
 dcm = pydicom.dcmread(file)
-
 num_frames = dcm.NumberOfFrames
 num_mats = len(dcm[0x00211009].value)
 
-
-file_off = 'ctdataset/SE0/IM0'
+file_off = f'ctdataset/SE{idx_guidewire}/IM0'
 dcm_off  = pydicom.dcmread(file_off)
-mat_off = np.array(dcm_off[0x00289520].value).reshape(4,4)[:3,3]
-# mat_off = np.array([-58.5, -68.599998, 690.5])
-mat_off = np.array([-57.3, -68.599998, 690.5])
+mat_off = np.array(dcm_off[0x0289520].value)[[3,7,11]]
+
+print(num_frames, num_mats, mat_off)
 
 angle1 = np.array([dcm[0x00191001].value]*num_frames) + dcm[0x00191197].value
 angle2 = np.array([dcm[0x00191002].value]*num_frames) + dcm[0x00191198].value
@@ -116,27 +125,13 @@ for item in dcm[0x0021100b]:
     P_list.append(P)
 P_list = np.array(P_list[3:294])
 
-# S = get_source_positions(P_list)[:,[1,0,2]]
-# print(fit_rotation_circle(S))
-# quit()
-
-# S_proj = np.zeros((num_frames, 3))
-# for i, P in enumerate(P_list):
-#     C = camera_center_from_P(P)
-#     S_proj[i] = C
-# S_proj = S_proj[:, [1,0,2]] * 0.1
-
 imgs = dcm.pixel_array
-points3D = o3d.io.read_point_cloud('ctdataset/SE6/Segment_1.ply')
-# points3D = o3d.io.read_point_cloud('ctdataset/Segment.ply')
+points3D = o3d.io.read_point_cloud(f'ctdataset/SE6/Segment_{idx_guidewire}.ply')
 points = np.asarray(points3D.points)  # (N, 3)
-# print(points)
 points += mat_off[None, :]
 
-
-
 H, W = 500, 500
-for i in [0,145,290]:
+for i in range(num_frames):
     img = imgs[i]
 
     # if angle2[i] < -90 or angle2[i] > 90:
@@ -155,14 +150,17 @@ for i in [0,145,290]:
 
     gt_img = img
     gt_img = (gt_img - gt_img.min()) / (gt_img.max() - gt_img.min()) * 255.0
+    cv2.imwrite(f'tmp/gt_{i}.png', gt_img)
+
     for point2d in point2D:
         if point2d[0] >=0 and point2d[0] <= W - 1 and point2d[1] >= 1 and point2d[1] <= H:
             gt_img[H - point2d[1].astype(np.int32), point2d[0].astype(np.int32)] = 255
-    cv2.imwrite(f'tmp/gt_{i}.png', gt_img)
+    cv2.imwrite(f'tmp/fusion_{i}.png', gt_img)
 
-# points = np.array([[0,0,0]])
-# for P in P_list:
-#     print(project_points(points, P) / 2)
-# quit()
-# points[:,0] *= -1
-# points[:,1] *= -1
+    mask_img = np.zeros((H,W))
+    for point2d in point2D:
+        if point2d[0] >=0 and point2d[0] <= W - 1 and point2d[1] >= 1 and point2d[1] <= H:
+            mask_img[H - point2d[1].astype(np.int32), point2d[0].astype(np.int32)] = 1
+    np.save(f'tmp/mask_{i}.npy', mask_img)
+
+cv2.imwrite('check.png', mask_img*255)

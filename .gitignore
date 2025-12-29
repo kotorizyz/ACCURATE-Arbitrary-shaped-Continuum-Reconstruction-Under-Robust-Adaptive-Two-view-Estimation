@@ -3,6 +3,7 @@ real_data/
 sim_data/
 
 tmp/
+seg_train_data/
 
 dataset/dataset_1/
 dataset/dataset_2/
