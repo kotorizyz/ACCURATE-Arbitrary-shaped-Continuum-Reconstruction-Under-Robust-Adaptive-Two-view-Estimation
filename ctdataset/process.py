@@ -65,13 +65,13 @@ def calculate_projection_matrix(
     cy = image_size[1] / 2.0
 
     K = np.array([
-        [fx, 0,  cx],
-        [0,  fy, cy],
+        [fx/2, 0,  cx/2],
+        [0,  -fy/2, cy/2],
         [0,  0,   1]
     ])
 
     P = K @ extrinsic
-    return P
+    return P, K, extrinsic
 
 def project_points(points_xyz, P):
     N = points_xyz.shape[0]
@@ -117,30 +117,44 @@ for i in range(num_frames):
     angle3[i] = angle3[0] + i * dlt_angle3
 
 P_list = []
-for item in dcm[0x0021100b]:
-    vals = list(map(float, item[0x0021100c].value))
-    P = np.array(vals).reshape(3,4)
-    P[:3, :3] *= 10.0
-    P = P[:,[1,0,2,3]]
-    P_list.append(P)
-P_list = np.array(P_list[3:294])
+
+# for i in range(len(angle1)):
+#     P = calculate_projection_matrix(angle1[i], angle2[2], angle3[i])
+#     P[0:2] /= 2
+#     P_list.append(P)
+
+# for item in dcm[0x0021100b]:
+#     vals = list(map(float, item[0x0021100c].value))
+#     P = np.array(vals).reshape(3,4)
+#     P[:3, :3] *= 10.0
+#     P = P[:,[1,0,2,3]]
+#     P[0:2] /= 2
+#     P_list.append(P)
+# P_list = np.array(P_list[3:294])
 
 imgs = dcm.pixel_array
 points3D = o3d.io.read_point_cloud(f'ctdataset/SE6/Segment_{idx_guidewire}.ply')
 points = np.asarray(points3D.points)  # (N, 3)
 points += mat_off[None, :]
 
+# pcd = o3d.geometry.PointCloud()
+# pcd.points = o3d.utility.Vector3dVector(points)
+# o3d.io.write_point_cloud(f"output/real/gt_{idx_guidewire}.ply", pcd)
+# quit()
+
 H, W = 500, 500
 for i in range(num_frames):
     img = imgs[i]
 
-    # if angle2[i] < -90 or angle2[i] > 90:
-    #     continue
-    # P = calculate_projection_matrix(angle1[i], angle2[i], angle3[i])
-    # point2D = project_points(points, P) / 2
+    if angle2[i] < -90 or angle2[i] > 90:
+        continue
+    P, K, Rt = calculate_projection_matrix(angle1[i], angle2[i], angle3[i])
+    np.save(f'tmp/K_{i}.npy', K)
+    np.save(f'tmp/Rt_{i}.npy', Rt)
+    point2D = project_points(points, P)
 
-    P = P_list[i]
-    point2D = project_points(points, P) / 2
+    # P = P_list[i]
+    # point2D = project_points(points, P)
 
     mask = (
         (point2D[:,0] >= 0) & (point2D[:,0] < W) &
@@ -154,13 +168,13 @@ for i in range(num_frames):
 
     for point2d in point2D:
         if point2d[0] >=0 and point2d[0] <= W - 1 and point2d[1] >= 1 and point2d[1] <= H:
-            gt_img[H - point2d[1].astype(np.int32), point2d[0].astype(np.int32)] = 255
+            gt_img[point2d[1].astype(np.int32), point2d[0].astype(np.int32)] = 255
     cv2.imwrite(f'tmp/fusion_{i}.png', gt_img)
 
     mask_img = np.zeros((H,W))
     for point2d in point2D:
         if point2d[0] >=0 and point2d[0] <= W - 1 and point2d[1] >= 1 and point2d[1] <= H:
-            mask_img[H - point2d[1].astype(np.int32), point2d[0].astype(np.int32)] = 1
+            mask_img[point2d[1].astype(np.int32), point2d[0].astype(np.int32)] = 1
     np.save(f'tmp/mask_{i}.npy', mask_img)
 
 cv2.imwrite('check.png', mask_img*255)

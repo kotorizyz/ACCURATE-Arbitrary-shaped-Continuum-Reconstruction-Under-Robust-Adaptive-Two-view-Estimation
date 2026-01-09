@@ -1,5 +1,7 @@
 import numpy as np
 import open3d as o3d
+from scipy.spatial import cKDTree
+from skimage.morphology import skeletonize_3d
 
 def point_to_segment_distances(points, seg_start, seg_end):
     P = points[:, None, :]          # (M,1,3)
@@ -40,18 +42,39 @@ def compute_point_to_curve_metrics(pred, gt):
     max_err = np.max(d_min)
     return d_min, rmse, mae, max_err
 
-def chamfer_distance(pred, gt):
-    d_pred, _ = point_to_polyline_distance(pred, gt)   # (N,)
-    d_gt, _ = point_to_polyline_distance(gt, pred)     # (N0,)
-    chamfer = np.mean(d_pred) + np.mean(d_gt)
-    hausdorff = max(np.max(d_pred), np.max(d_gt))
-    return chamfer, hausdorff, d_pred, d_gt
+# def chamfer_distance(pred, gt):
+#     d_pred, _ = point_to_polyline_distance(pred, gt)   # (N,)
+#     d_gt, _ = point_to_polyline_distance(gt, pred)     # (N0,)
+#     chamfer = np.mean(d_pred) + np.mean(d_gt)
+#     hausdorff = max(np.max(d_pred), np.max(d_gt))
+#     return chamfer, hausdorff, d_pred, d_gt
 
-for i in range(10):
-    gt = o3d.io.read_point_cloud(f'output/gt_{i}.ply')
+
+def chamfer_distance(X, Y):
+    kdtree_Y = cKDTree(Y)
+    dist_X_to_Y, _ = kdtree_Y.query(X)   # 每个 X 找 Y 最近点
+
+    kdtree_X = cKDTree(X)
+    dist_Y_to_X, _ = kdtree_X.query(Y)   # 每个 Y 找 X 最近点
+
+    cd = np.mean(dist_X_to_Y)
+    return cd
+
+from pycpd import RigidRegistration
+
+for i in range(1):
+    gt = o3d.io.read_point_cloud(f'output/real/gt_{i}.ply')
     gt = np.asarray(gt.points)
-    pred = o3d.io.read_point_cloud(f'output/rec_{i}.ply')
+
+    pred = o3d.io.read_point_cloud(f'output/real/rec_{i}.ply')
     pred = np.asarray(pred.points)
+
+    reg = RigidRegistration(X = pred, Y = gt)
+    pred, (s, R, t) = reg.register()
+
     # print(gt.shape, pred.shape)
-    d_pred, rmse, mae, max_err = compute_point_to_curve_metrics(pred, gt)
-    print(f"{i:<3d}  RMSE: {rmse:<10.6f}  MAE: {mae:<10.6f}  Max: {max_err:<10.6f}")
+    # d_pred, rmse, mae, max_err = compute_point_to_curve_metrics(pred, gt)
+    # print(f"{i:<3d}  RMSE: {rmse:<10.6f}  MAE: {mae:<10.6f}  Max: {max_err:<10.6f}")
+
+    err = chamfer_distance(pred, gt)
+    print(err)
