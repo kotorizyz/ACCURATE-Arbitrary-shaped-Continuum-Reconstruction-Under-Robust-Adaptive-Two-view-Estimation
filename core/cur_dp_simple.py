@@ -38,6 +38,7 @@ def compute_stereo_params(K1,K2,R1,R2,t1,t2):
     P2 = K2 @ np.concatenate((R2, t2[:,None]), axis=1)
     return R, T, E, F, P1, P2
 
+#==================================
 # CHECK FUNCTION
 def draw_epiline(img, line):
     a, b, c = line
@@ -87,6 +88,8 @@ def points_to_strong_contrast_image(
         img[y,x] = color
 
     return img
+
+#==========================================
 
 def fix_single_pixel_gaps(mask, max_gap=1):
     skel = skeletonize(mask>0).astype(np.uint8)
@@ -330,8 +333,8 @@ if __name__ == '__main__':
 
     H, W = 500,500
 
-    mask1 = np.load('tmp/data0_gt_106.npz')
-    # fusion1 = cv2.imread('tmp/gt_106.png', cv2.IMREAD_GRAYSCALE)
+    mask1 = np.load('mask/data0_gt_106.npz')
+    fusion1 = cv2.imread('tmp/gt_106.png', cv2.IMREAD_GRAYSCALE)
     # fusion1[mask1['probabilities'][1,0] > 0.5] = 255
     # cv2.imwrite('fusionL.png', fusion1)
     mask1 = (mask1['probabilities'][1,0] > 0.5) * 1.0
@@ -433,6 +436,9 @@ if __name__ == '__main__':
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pts_3d)
         o3d.io.write_point_cloud(f"output/real/rec_0.ply", pcd)
+
+        np.save('pts.npy', pts_3d)
+        quit()
 
         pts_3d = np.array(pts_3d)
         pts_2d = project_points(pts_3d, P2)

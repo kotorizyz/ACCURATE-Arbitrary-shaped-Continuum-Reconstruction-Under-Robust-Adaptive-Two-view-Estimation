@@ -107,6 +107,7 @@ def traverse_curve(mask, window_size=10, r_min=1, r_max=2, gap_threshold=3):
 
     skel = skeletonize(mask>0).astype(np.uint8)
     # cv2.imwrite('skel.png', skel*255)
+    # quit()
 
     points = np.argwhere(skel>0)
     deg_map = np.zeros_like(skel, dtype=int)
@@ -240,12 +241,42 @@ def dp_left_right_matching(epi, tau=2):
     matches.reverse()
     return matches
 
+def min_cost_path_and_route(D):
+    N1, N2 = D.shape
+    
+    dp = np.zeros_like(D, dtype=float)
+    parent = np.full((N1, N2, 2), -1, dtype=int)
 
+    dp[0,0] = D[0,0]
+    for j in range(1, N2):
+        dp[0,j] = dp[0,j-1] + D[0,j]
+        parent[0,j] = [0, j-1]
+    for i in range(1, N1):
+        dp[i,0] = dp[i-1,0] + D[i,0]
+        parent[i,0] = [i-1, 0]
+    for i in range(1, N1):
+        for j in range(1, N2):
+            if dp[i-1,j] < dp[i,j-1]:
+                dp[i,j] = dp[i-1,j] + D[i,j]
+                parent[i,j] = [i-1, j]
+            else:
+                dp[i,j] = dp[i,j-1] + D[i,j]
+                parent[i,j] = [i, j-1]
+
+    path = []
+    i, j = N1-1, N2-1
+    while i != -1 and j != -1:
+        path.append((i,j))
+        pi, pj = parent[i,j]
+        i, j = pi, pj
+
+    path.reverse()
+    return dp[-1,-1], path
 
 if __name__ == '__main__':
 
     H, W = 2048, 512
-    num_rec = 10
+    num_rec = 1
     epsilon = 3
     pts_3d_gt = []
     pts_L = []
@@ -254,7 +285,7 @@ if __name__ == '__main__':
     mask1 = []
     mask2 = []
     for i in range(num_rec):
-        data_i = torch.load(f'./dataset/processed_data/data_{i+111}.pt')
+        data_i = torch.load(f'./dataset/processed_data/data_{i+1}.pt')
 
         uv1 = np.rint(data_i['uv1']).numpy().astype(np.int32)
         uv2 = np.rint(data_i['uv2']).numpy().astype(np.int32)
@@ -269,11 +300,14 @@ if __name__ == '__main__':
         t2 = data_i['RT2'][:3,3].numpy()
         param.append({'K1': K1, 'K2': K2, 'R1': R1, 'R2': R2, 't1': t1, 't2': t2})
 
-        mask1.append(cv2.imread(f'./dataset/processed_data/pred_{i+111}_0.png', cv2.IMREAD_GRAYSCALE))
-        mask2.append(cv2.imread(f'./dataset/processed_data/pred_{i+111}_1.png', cv2.IMREAD_GRAYSCALE))
+        # mask1.append(cv2.imread(f'./dataset/processed_data/pred_{i+111}_0.png', cv2.IMREAD_GRAYSCALE))
+        # mask2.append(cv2.imread(f'./dataset/processed_data/pred_{i+111}_1.png', cv2.IMREAD_GRAYSCALE))
 
-        # mask1.append(data_i['mask1'].numpy())
-        # mask2.append(data_i['mask2'].numpy())
+        mask1.append(data_i['mask1'].numpy())
+        mask2.append(data_i['mask2'].numpy())
+
+        # cv2.imwrite(f'mask/mask_L_{i}.png', mask1[i]*255)
+        # cv2.imwrite(f'mask/mask_R_{i}.png', mask2[i]*255)
 
         pts_3d_gt.append(data_i['points'].numpy())
 
@@ -295,6 +329,13 @@ if __name__ == '__main__':
         #     if i % 10 == 0:
         #         cv2.imwrite(f"order/{i}.png", mask)
         # quit()
+
+    # mask = np.zeros((H,W))
+    # for i in range(len(seq)):
+    #     mask[seq[i][0], seq[i][1]] = 255
+    #     if i > 393:
+    #         cv2.imwrite(f'{i}.png', mask)
+    #         quit()
 
     # List: pts_order_L, pts_order_R, param
     for num_guidewire in range(len(pts_order_L)):
@@ -326,7 +367,8 @@ if __name__ == '__main__':
             denom = np.sqrt(a*a + b*b)
             epi[i] = num / denom
         
-        matches = dp_left_right_matching(epi)
+        # matches = dp_left_right_matching(epi)
+        ost, matches = min_cost_path_and_route(np.abs(epi))
 
         idx_L_prev = 0
         idx_R_prev = 0
@@ -359,6 +401,9 @@ if __name__ == '__main__':
             pts_3d.append(pt_prev_3d)
             idx_L_prev = idx_L
             idx_R_prev = idx_R
+        
+        # np.save('pts.npy', np.array(pts_3d))
+        # quit()
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pts_3d)
         o3d.io.write_point_cloud(f"output/rec_{num_guidewire}.ply", pcd)
