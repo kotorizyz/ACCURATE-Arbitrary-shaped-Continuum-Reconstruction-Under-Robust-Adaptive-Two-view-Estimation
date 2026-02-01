@@ -35,46 +35,48 @@ def point_to_polyline_distance(points, polyline):
     d_min = dists[np.arange(dists.shape[0]), argmin_seg]
     return d_min, argmin_seg
 
-def compute_point_to_curve_metrics(pred, gt):
+def compute_point_to_curve_metrics_simulation(pred, gt):
     d_min, _ = point_to_polyline_distance(pred, gt)
     rmse = np.sqrt(np.mean(d_min**2))
     mae = np.mean(d_min)
     max_err = np.max(d_min)
-    return d_min, rmse, mae, max_err
+    return mae, max_err
 
-# def chamfer_distance(pred, gt):
-#     d_pred, _ = point_to_polyline_distance(pred, gt)   # (N,)
-#     d_gt, _ = point_to_polyline_distance(gt, pred)     # (N0,)
-#     chamfer = np.mean(d_pred) + np.mean(d_gt)
-#     hausdorff = max(np.max(d_pred), np.max(d_gt))
-#     return chamfer, hausdorff, d_pred, d_gt
+def compute_point_to_curve_metrics_phantom(pred, gt):
+    # pred [N', 3], gt [N, 3]
+    tree = cKDTree(pred)
+    dist, _ = tree.query(gt, k=1)
 
+    mae = dist.mean()
+    max_err = dist.max()
+    return mae, max_err
 
-def chamfer_distance(X, Y):
-    kdtree_Y = cKDTree(Y)
-    dist_X_to_Y, _ = kdtree_Y.query(X)   # 每个 X 找 Y 最近点
+category = 'phantom'
+method = 'ACCURATE'
 
-    kdtree_X = cKDTree(X)
-    dist_Y_to_X, _ = kdtree_X.query(Y)   # 每个 Y 找 X 最近点
+data_path = f'ACCURATE_dataset/{category}'
+test_names = []
+with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
+    line = f.readline()
+    while line:
+        test_names.append(line.strip())
+        line = f.readline()
 
-    cd = np.mean(dist_X_to_Y)
-    return cd
-
-from pycpd import RigidRegistration
-
-for i in range(1):
-    gt = o3d.io.read_point_cloud(f'output/real/gt_{i}.ply')
+sum_mae = 0
+sum_max_err = 0
+for test_name in test_names:
+    gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
     gt = np.asarray(gt.points)
 
-    pred = o3d.io.read_point_cloud(f'output/real/rec_{i}.ply')
-    pred = np.asarray(pred.points)
+    rec = o3d.io.read_point_cloud(f'experiment/{category}/{method}/{test_name}.ply')
+    rec = np.asarray(rec.points)
 
-    reg = RigidRegistration(X = pred, Y = gt)
-    pred, (s, R, t) = reg.register()
-
-    # print(gt.shape, pred.shape)
-    # d_pred, rmse, mae, max_err = compute_point_to_curve_metrics(pred, gt)
-    # print(f"{i:<3d}  RMSE: {rmse:<10.6f}  MAE: {mae:<10.6f}  Max: {max_err:<10.6f}")
-
-    err = chamfer_distance(pred, gt)
-    print(err)
+    if category == 'phantom':
+        mae, max_err = compute_point_to_curve_metrics_phantom(rec, gt)
+    else:
+        mae, max_err = compute_point_to_curve_metrics_simulation(rec, gt)
+    sum_mae += mae
+    sum_max_err += max_err
+    print(test_name, mae, max_err)
+print(f'Average MAE: {sum_mae/len(test_names)}')
+print(f'Average Max Error: {sum_max_err/len(test_names)}')

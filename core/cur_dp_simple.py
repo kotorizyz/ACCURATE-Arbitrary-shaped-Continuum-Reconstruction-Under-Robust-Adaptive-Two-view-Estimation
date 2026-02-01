@@ -402,9 +402,6 @@ if __name__ == '__main__':
         # matches = dp_left_right_matching(epi)
         cost, matches = min_cost_path_and_route(np.abs(epi))
 
-        idx_L_prev = 0
-        idx_R_prev = 0
-        max_dlt = 0
         num_pair = len(matches)
         
         for i in range(num_pair):
@@ -431,8 +428,6 @@ if __name__ == '__main__':
             pt_prev_3d = (points4D[:3] / points4D[3]).flatten()
 
             pts_3d.append(pt_prev_3d)
-            idx_L_prev = idx_L
-            idx_R_prev = idx_R
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pts_3d)
         o3d.io.write_point_cloud(f"output/real/rec_0.ply", pcd)
