@@ -51,7 +51,78 @@ def compute_point_to_curve_metrics_phantom(pred, gt):
     max_err = dist.max()
     return mae, max_err
 
-category = 'phantom'
+def compute_acc_comp(
+    gt: np.ndarray,
+    pred: np.ndarray,
+    tau: float = None,
+):
+    """
+    Compute Accuracy / Completeness for point cloud reconstruction.
+
+    Parameters
+    ----------
+    gt : np.ndarray, shape [N, 3]
+        Ground truth point cloud
+    pred : np.ndarray, shape [N', 3]
+        Reconstructed point cloud
+    tau : float or None
+        Threshold (e.g., 0.5 or 1.0 in mm).
+        If None, only continuous Acc / Comp are returned.
+
+    Returns
+    -------
+    results : dict
+        {
+            'acc': float,
+            'comp': float,
+            'acc_tau': float (optional),
+            'comp_tau': float (optional),
+            'fscore': float (optional)
+        }
+    """
+
+    gt = np.asarray(gt, dtype=np.float32)
+    pred = np.asarray(pred, dtype=np.float32)
+
+    assert gt.ndim == 2 and gt.shape[1] == 3
+    assert pred.ndim == 2 and pred.shape[1] == 3
+
+    # Build KD-Trees
+    tree_gt = cKDTree(gt)
+    tree_pred = cKDTree(pred)
+
+    # Accuracy: pred -> gt
+    dist_acc, _ = tree_gt.query(pred, k=1)
+    acc = float(dist_acc.mean())
+
+    # Completeness: gt -> pred
+    dist_comp, _ = tree_pred.query(gt, k=1)
+    comp = float(dist_comp.mean())
+
+    results = {
+        "acc": acc,
+        "comp": comp,
+    }
+
+    # Thresholded metrics
+    if tau is not None:
+        acc_tau = float((dist_acc < tau).mean())
+        comp_tau = float((dist_comp < tau).mean())
+
+        if acc_tau + comp_tau > 0:
+            fscore = 2 * acc_tau * comp_tau / (acc_tau + comp_tau)
+        else:
+            fscore = 0.0
+
+        results.update({
+            "acc_tau": acc_tau,
+            "comp_tau": comp_tau,
+            "fscore": fscore,
+        })
+
+    return results
+
+category = 'simulation'
 method = 'ACCURATE'
 
 data_path = f'ACCURATE_dataset/{category}'
@@ -64,6 +135,8 @@ with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8')
 
 sum_mae = 0
 sum_max_err = 0
+sum_acc = 0
+sum_comp = 0
 for test_name in test_names:
     gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
     gt = np.asarray(gt.points)
@@ -75,8 +148,17 @@ for test_name in test_names:
         mae, max_err = compute_point_to_curve_metrics_phantom(rec, gt)
     else:
         mae, max_err = compute_point_to_curve_metrics_simulation(rec, gt)
+    
+    result = compute_acc_comp(gt, rec, tau=1)
+    acc = result['acc']
+    comp = result['comp']
     sum_mae += mae
     sum_max_err += max_err
-    print(test_name, mae, max_err)
+    sum_acc += acc
+    sum_comp += comp
+    print(test_name, mae, max_err, acc, comp)
 print(f'Average MAE: {sum_mae/len(test_names)}')
 print(f'Average Max Error: {sum_max_err/len(test_names)}')
+print(f'Average Acc: {sum_acc/len(test_names)}')
+print(f'Average Comp: {sum_comp/len(test_names)}')
+print(f'Overall: {(sum_acc/len(test_names) + sum_comp/len(test_names))/2}')
