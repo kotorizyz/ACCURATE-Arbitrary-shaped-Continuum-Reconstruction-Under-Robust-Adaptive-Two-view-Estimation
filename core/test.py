@@ -99,66 +99,46 @@ def compute_acc_comp(
     dist_comp, _ = tree_pred.query(gt, k=1)
     comp = float(dist_comp.mean())
 
-    results = {
-        "acc": acc,
-        "comp": comp,
-    }
+    return acc, comp
 
-    # Thresholded metrics
-    if tau is not None:
-        acc_tau = float((dist_acc < tau).mean())
-        comp_tau = float((dist_comp < tau).mean())
+if __name__ == '__main__':
 
-        if acc_tau + comp_tau > 0:
-            fscore = 2 * acc_tau * comp_tau / (acc_tau + comp_tau)
-        else:
-            fscore = 0.0
+    category = 'phantom'
+    method = 'Fast3R'
 
-        results.update({
-            "acc_tau": acc_tau,
-            "comp_tau": comp_tau,
-            "fscore": fscore,
-        })
-
-    return results
-
-category = 'simulation'
-method = 'ACCURATE'
-
-data_path = f'ACCURATE_dataset/{category}'
-test_names = []
-with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
-    line = f.readline()
-    while line:
-        test_names.append(line.strip())
+    data_path = f'ACCURATE_dataset/{category}'
+    test_names = []
+    with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
         line = f.readline()
+        while line:
+            test_names.append(line.strip())
+            line = f.readline()
 
-sum_mae = 0
-sum_max_err = 0
-sum_acc = 0
-sum_comp = 0
-for test_name in test_names:
-    gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
-    gt = np.asarray(gt.points)
+    sum_mae = 0
+    sum_max_err = 0
+    sum_acc = 0
+    sum_comp = 0
+    for test_name in test_names:
+        gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
+        gt = np.asarray(gt.points)
 
-    rec = o3d.io.read_point_cloud(f'experiment/{category}/{method}/{test_name}.ply')
-    rec = np.asarray(rec.points)
+        rec = o3d.io.read_point_cloud(f'experiment/{category}/{method}/{test_name}.ply')
+        rec = np.asarray(rec.points)
 
-    if category == 'phantom':
+        # if category == 'phantom':
+        #     mae, max_err = compute_point_to_curve_metrics_phantom(rec, gt)
+        # else:
         mae, max_err = compute_point_to_curve_metrics_phantom(rec, gt)
-    else:
-        mae, max_err = compute_point_to_curve_metrics_simulation(rec, gt)
-    
-    result = compute_acc_comp(gt, rec, tau=1)
-    acc = result['acc']
-    comp = result['comp']
-    sum_mae += mae
-    sum_max_err += max_err
-    sum_acc += acc
-    sum_comp += comp
-    print(test_name, mae, max_err, acc, comp)
-print(f'Average MAE: {sum_mae/len(test_names)}')
-print(f'Average Max Error: {sum_max_err/len(test_names)}')
-print(f'Average Acc: {sum_acc/len(test_names)}')
-print(f'Average Comp: {sum_comp/len(test_names)}')
-print(f'Overall: {(sum_acc/len(test_names) + sum_comp/len(test_names))/2}')
+        
+        acc, comp = compute_acc_comp(gt, rec)
+        # acc = result['acc']
+        # comp = result['comp']
+        sum_mae += mae
+        sum_max_err += max_err
+        sum_acc += acc
+        sum_comp += comp
+        print(acc, comp, mae, max_err)
+    print(f'Average MAE: {sum_mae/len(test_names)}')
+    print(f'Average Accuracy: {sum_acc/len(test_names)}')
+    print(f'Average Completeness: {sum_comp/len(test_names)}')
+    print(f'Average Max Error: {sum_max_err/len(test_names)}')

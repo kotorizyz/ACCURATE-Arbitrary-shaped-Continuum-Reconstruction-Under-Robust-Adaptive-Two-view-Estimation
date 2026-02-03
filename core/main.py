@@ -209,43 +209,45 @@ def reconstruction(seq_L, seq_R, matches, P1, P2):
     pcd.points = o3d.utility.Vector3dVector(pts_3d)
     return pcd
 
-category = 'phantom'
+if __name__ == '__main__':
 
-data_path = f'ACCURATE_dataset/{category}'
-test_names = []
-with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
-    fileline = f.readline()
-    while fileline:
-        test_names.append(fileline.strip())
+    category = 'phantom'
+
+    data_path = f'ACCURATE_dataset/{category}'
+    test_names = []
+    with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
         fileline = f.readline()
+        while fileline:
+            test_names.append(fileline.strip())
+            fileline = f.readline()
 
-for test_name in test_names:
-    print(test_name)
-    test_path = os.path.join(data_path, test_name)
+    for test_name in test_names:
+        print(test_name)
+        test_path = os.path.join(data_path, test_name)
 
-    # tempt mask
-    mask_L = cv2.imread(os.path.join(test_path, 'masks/mask_L.png'), cv2.IMREAD_UNCHANGED)
-    mask_R = cv2.imread(os.path.join(test_path, 'masks/mask_R.png'), cv2.IMREAD_UNCHANGED)
-    if category == 'phantom':
-        mask_L = skeletonize(mask_L>0).astype(np.uint8)
-        mask_R = skeletonize(mask_R>0).astype(np.uint8)
-        mask_L, _ = fix_gaps(mask_L, 15)
-        mask_R, _ = fix_gaps(mask_R, 15)
+        # tempt mask
+        mask_L = cv2.imread(os.path.join(test_path, 'masks/mask_L.png'), cv2.IMREAD_UNCHANGED)
+        mask_R = cv2.imread(os.path.join(test_path, 'masks/mask_R.png'), cv2.IMREAD_UNCHANGED)
+        if category == 'phantom':
+            mask_L = skeletonize(mask_L>0).astype(np.uint8)
+            mask_R = skeletonize(mask_R>0).astype(np.uint8)
+            mask_L, _ = fix_gaps(mask_L, 15)
+            mask_R, _ = fix_gaps(mask_R, 15)
 
-    # camera params
-    K_L = np.loadtxt(os.path.join(test_path, 'calibration/K_L.txt'))
-    K_R = np.loadtxt(os.path.join(test_path, 'calibration/K_R.txt'))
-    RT_L = np.loadtxt(os.path.join(test_path, 'calibration/RT_L.txt'))
-    RT_R = np.loadtxt(os.path.join(test_path, 'calibration/RT_R.txt'))
-    R_L = RT_L[:,:3]
-    t_L = RT_L[:,3]
-    R_R = RT_R[:,:3]
-    t_R = RT_R[:,3]
-    R, T, E, F, P1, P2 = compute_stereo_params(K_L,K_R,R_L,R_R,t_L,t_R)
+        # camera params
+        K_L = np.loadtxt(os.path.join(test_path, 'calibration/K_L.txt'))
+        K_R = np.loadtxt(os.path.join(test_path, 'calibration/K_R.txt'))
+        RT_L = np.loadtxt(os.path.join(test_path, 'calibration/RT_L.txt'))
+        RT_R = np.loadtxt(os.path.join(test_path, 'calibration/RT_R.txt'))
+        R_L = RT_L[:,:3]
+        t_L = RT_L[:,3]
+        R_R = RT_R[:,:3]
+        t_R = RT_R[:,3]
+        R, T, E, F, P1, P2 = compute_stereo_params(K_L,K_R,R_L,R_R,t_L,t_R)
 
-    seq_L, seq_R = gctt(mask_L, mask_R, F)
+        seq_L, seq_R = gctt(mask_L, mask_R, F)
 
-    matches = ecdp(seq_L, seq_R, F)
+        matches = ecdp(seq_L, seq_R, F)
 
-    pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
-    o3d.io.write_point_cloud(f"experiment/{category}/ACCURATE/{test_name}.ply", pcd)
+        pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
+        o3d.io.write_point_cloud(f"experiment/{category}/ACCURATE/{test_name}.ply", pcd)
