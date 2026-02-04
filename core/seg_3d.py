@@ -213,8 +213,61 @@ def depth_mask_to_world(
     return pts_world
 
 
+import numpy as np
+
+def depth_from_flow(
+    flow, KL, KR,
+    RT_L, RT_R
+):
+    H, W = flow.shape
+    depth = np.zeros((H, W), dtype=np.float32)
+
+    # decompose w2c
+    R_L, t_L = RT_L[:, :3], RT_L[:, 3]
+    R_R, t_R = RT_R[:, :3], RT_R[:, 3]
+
+    # right -> left camera transform
+    R_RL = R_L @ R_R.T
+    t_RL = t_L - R_RL @ t_R
+
+    KL_inv = np.linalg.inv(KL)
+    KR_inv = np.linalg.inv(KR)
+
+    for v in range(H):
+        for u in range(W):
+            du, dv = flow[v,u], 0
+            ur, vr = u - du, v - dv
+
+            if ur < 0 or ur >= W or vr < 0 or vr >= H:
+                continue
+
+            # left ray
+            xL = KL_inv @ np.array([u, v, 1.0])
+            dL = xL / np.linalg.norm(xL)
+
+            # right ray (right cam)
+            xR = KR_inv @ np.array([ur, vr, 1.0])
+            dR = xR / np.linalg.norm(xR)
+
+            # transform to left cam
+            dR = R_RL @ dR
+            oR = t_RL
+
+            b = dL @ dR
+            d = dL @ oR
+            e = dR @ oR
+            denom = 1.0 - b * b
+
+            if denom < 1e-6:
+                continue
+
+            s = (b * e - d) / denom
+            depth[v, u] = s
+
+    return depth
+
 if __name__ == '__main__':
-    category = 'phantom'
+    category = 'simulation'
     method = 'MonSter'
 
     data_path = f'ACCURATE_dataset/{category}'
@@ -252,6 +305,14 @@ if __name__ == '__main__':
             elif category == 'phantom':
                 depth_L = cv2.resize(depth_L, (500, 500))
                 depth_R = cv2.resize(depth_R, (500, 500))
+        elif method == 'MonSter':
+            flow_path = f'experiment/{category}/{method}/{test_name}.npy'
+            flow = np.load(flow_path)
+            if category == 'simulation':
+                flow = cv2.resize(flow, (512, 2048))
+                depth_L = depth_from_flow(flow, K_L, K_R, RT_L, RT_R)
+            elif category == 'phantom':
+                depth_L = depth_from_flow(flow, K_L, K_R, RT_L, RT_R)
         else:
             depthL_path = f'experiment/{category}/{method}/{test_name}_L.npy'
             depthR_path = f'experiment/{category}/{method}/{test_name}_R.npy'
@@ -269,9 +330,13 @@ if __name__ == '__main__':
             K_L, RT_L[:,:3], RT_L[:,3],
             img_shape[0], img_shape[1]
         )
+
         maskL = depth_L_gt != 10000
+        if method == 'MonSter':
+            maskL = maskL & (np.abs(depth_L) > 1)
         depth_L_eff_gt = depth_L_gt[maskL]
         depth_L_eff_pred = depth_L[maskL]
+
         alpha_L = optimal_scale_l1(depth_L_eff_gt, depth_L_eff_pred)
         # pred_scaled = alpha * depth_L_mask
         pts_3d_L_pred = depth_mask_to_world(
@@ -281,6 +346,9 @@ if __name__ == '__main__':
             RT_L[:,:3],
             RT_L[:,3]
         )
+        if method == 'MonSter':
+            o3d.io.write_point_cloud(f'experiment/{category}/{method}/{test_name}.ply', o3d.geometry.PointCloud(o3d.utility.Vector3dVector(np.vstack([pts_3d_L_pred, pts_3d_L_pred]))))
+            continue
 
         depth_R_gt = pointcloud_to_depth_KRT(
             pts_3d_gt,

@@ -103,8 +103,8 @@ def compute_acc_comp(
 
 if __name__ == '__main__':
 
-    category = 'phantom'
-    method = 'Fast3R'
+    category = 'simulation'
+    method = 'MonSter'
 
     data_path = f'ACCURATE_dataset/{category}'
     test_names = []
