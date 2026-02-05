@@ -332,18 +332,23 @@ def min_cost_path_and_route(D):
 if __name__ == '__main__':
 
     H, W = 500,500
+    name = 'case_008'
 
-    mask1 = np.load('mask/data0_gt_106.npz')
-    fusion1 = cv2.imread('tmp/gt_106.png', cv2.IMREAD_GRAYSCALE)
+    mask1 = np.load(f'experiment/image/simulation/prediction_results/{name}_L.npz')
+    # fusion1 = cv2.imread('tmp/gt_106.png', cv2.IMREAD_GRAYSCALE)
     # fusion1[mask1['probabilities'][1,0] > 0.5] = 255
     # cv2.imwrite('fusionL.png', fusion1)
     mask1 = (mask1['probabilities'][1,0] > 0.5) * 1.0
-    mask2 = np.load('tmp/data0_gt_168.npz')
+    mask2 = np.load(f'experiment/image/simulation/prediction_results/{name}_R.npz')
     # fusion2 = cv2.imread('tmp/gt_168.png', cv2.IMREAD_GRAYSCALE)
     # fusion2[mask2['probabilities'][1,0] > 0.5] = 255
     # cv2.imwrite('fusionR.png', fusion2)
     mask2 = (mask2['probabilities'][1,0] > 0.5) * 1.0
     # quit()
+
+    cv2.imwrite('L.png', mask1*255)
+    cv2.imwrite('R.png', mask2*255)
+    quit()
 
     pts_order_L = []
     mask1 = fix_skel(mask1)
@@ -380,12 +385,12 @@ if __name__ == '__main__':
         prev_idx_R = 0
         pts_3d = []
 
-        K1 = np.load('tmp/K_106.npy')
-        R1 = np.load('tmp/Rt_106.npy')[:,:3]
-        t1 = np.load('tmp/Rt_106.npy')[:,3]
-        K2 = np.load('tmp/K_168.npy')
-        R2 = np.load('tmp/Rt_168.npy')[:,:3]
-        t2 = np.load('tmp/Rt_168.npy')[:,3]
+        K1 = np.loadtxt(f'ACCURATE_dataset/simulation/{name}/calibration/K_L.txt')
+        R1 = np.loadtxt(f'ACCURATE_dataset/simulation/{name}/calibration/RT_L.txt')[:,:3]
+        t1 = np.loadtxt(f'ACCURATE_dataset/simulation/{name}/calibration/RT_L.txt')[:,3]
+        K2 = np.loadtxt(f'ACCURATE_dataset/simulation/{name}/calibration/K_R.txt')
+        R2 = np.loadtxt(f'ACCURATE_dataset/simulation/{name}/calibration/RT_R.txt')[:,:3]
+        t2 = np.loadtxt(f'ACCURATE_dataset/simulation/{name}/calibration/RT_R.txt')[:,3]
         R, T, E, F, P1, P2 = compute_stereo_params(K1,K2,R1,R2,t1,t2)
 
         line_right = cv2.computeCorrespondEpilines(pts_L[:,::-1], 1, F).reshape(-1, 3)

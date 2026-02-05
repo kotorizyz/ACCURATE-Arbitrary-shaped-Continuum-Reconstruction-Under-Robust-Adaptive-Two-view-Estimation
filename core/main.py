@@ -211,9 +211,9 @@ def reconstruction(seq_L, seq_R, matches, P1, P2):
 
 if __name__ == '__main__':
 
-    category = 'phantom'
+    category = 'simulation'
 
-    data_path = f'ACCURATE_dataset/{category}'
+    data_path = f'experiment/image/{category}'
     test_names = []
     with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
         fileline = f.readline()
@@ -223,22 +223,23 @@ if __name__ == '__main__':
 
     for test_name in test_names:
         print(test_name)
-        test_path = os.path.join(data_path, test_name)
+        test_path = os.path.join(data_path, 'prediction_results')
 
         # tempt mask
-        mask_L = cv2.imread(os.path.join(test_path, 'masks/mask_L.png'), cv2.IMREAD_UNCHANGED)
-        mask_R = cv2.imread(os.path.join(test_path, 'masks/mask_R.png'), cv2.IMREAD_UNCHANGED)
-        if category == 'phantom':
-            mask_L = skeletonize(mask_L>0).astype(np.uint8)
-            mask_R = skeletonize(mask_R>0).astype(np.uint8)
-            mask_L, _ = fix_gaps(mask_L, 15)
-            mask_R, _ = fix_gaps(mask_R, 15)
+        mask_L = cv2.imread(os.path.join(test_path, f'{test_name}_L.png'), cv2.IMREAD_UNCHANGED)
+        mask_R = cv2.imread(os.path.join(test_path, f'{test_name}_R.png'), cv2.IMREAD_UNCHANGED)
+
+        mask_L = skeletonize(mask_L>0).astype(np.uint8)
+        mask_R = skeletonize(mask_R>0).astype(np.uint8)
+        mask_L, _ = fix_gaps(mask_L, 10)
+        mask_R, _ = fix_gaps(mask_R, 10)
+        # print(mask_L.shape, mask_L.max(), mask_L.min())
 
         # camera params
-        K_L = np.loadtxt(os.path.join(test_path, 'calibration/K_L.txt'))
-        K_R = np.loadtxt(os.path.join(test_path, 'calibration/K_R.txt'))
-        RT_L = np.loadtxt(os.path.join(test_path, 'calibration/RT_L.txt'))
-        RT_R = np.loadtxt(os.path.join(test_path, 'calibration/RT_R.txt'))
+        K_L = np.loadtxt(f'ACCURATE_dataset/{category}/{test_name}/calibration/K_L.txt')
+        K_R = np.loadtxt(os.path.join(f'ACCURATE_dataset/{category}/{test_name}/calibration/K_R.txt'))
+        RT_L = np.loadtxt(os.path.join(f'ACCURATE_dataset/{category}/{test_name}/calibration/RT_L.txt'))
+        RT_R = np.loadtxt(os.path.join(f'ACCURATE_dataset/{category}/{test_name}/calibration/RT_R.txt'))
         R_L = RT_L[:,:3]
         t_L = RT_L[:,3]
         R_R = RT_R[:,:3]
@@ -250,4 +251,4 @@ if __name__ == '__main__':
         matches = ecdp(seq_L, seq_R, F)
 
         pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
-        o3d.io.write_point_cloud(f"experiment/{category}/ACCURATE/{test_name}.ply", pcd)
+        o3d.io.write_point_cloud(f"{test_path}/{test_name}.ply", pcd)

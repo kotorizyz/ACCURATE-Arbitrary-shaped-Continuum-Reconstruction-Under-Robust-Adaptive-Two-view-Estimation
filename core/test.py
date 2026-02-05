@@ -122,7 +122,7 @@ if __name__ == '__main__':
         gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
         gt = np.asarray(gt.points)
 
-        rec = o3d.io.read_point_cloud(f'experiment/{category}/{method}/{test_name}.ply')
+        rec = o3d.io.read_point_cloud(f'experiment/image/{category}/prediction_results/{test_name}.ply')
         rec = np.asarray(rec.points)
 
         # if category == 'phantom':
@@ -137,8 +137,9 @@ if __name__ == '__main__':
         sum_max_err += max_err
         sum_acc += acc
         sum_comp += comp
-        print(acc, comp, mae, max_err)
+        print(test_name, acc, comp, mae, max_err)
     print(f'Average MAE: {sum_mae/len(test_names)}')
     print(f'Average Accuracy: {sum_acc/len(test_names)}')
     print(f'Average Completeness: {sum_comp/len(test_names)}')
+    print(f'Overall: {(sum_acc + sum_comp) / len(test_names) / 2}')
     print(f'Average Max Error: {sum_max_err/len(test_names)}')
