@@ -329,10 +329,51 @@ def min_cost_path_and_route(D):
     path.reverse()
     return dp[-1,-1], path
 
+import numpy as np
+import cv2
+from scipy.spatial.distance import cdist
+
+def find_endpoints(skel):
+    skel = skel.astype(np.uint8)
+    kernel = np.array([[1,1,1],
+                       [1,10,1],
+                       [1,1,1]])
+
+    conv = cv2.filter2D(skel, -1, kernel)
+    endpoints = np.argwhere(conv == 11)  # 自身10 + 一个邻居1
+    return endpoints
+
+
+def connect_endpoints(skel, max_dist=10):
+    skel = skel.copy().astype(np.uint8)
+
+    pts = find_endpoints(skel)
+    if len(pts) < 2:
+        return skel
+
+    dists = cdist(pts, pts)
+    np.fill_diagonal(dists, np.inf)
+
+    while True:
+        i, j = np.unravel_index(np.argmin(dists), dists.shape)
+        if dists[i, j] > max_dist:
+            break
+
+        p1 = tuple(pts[i][::-1])
+        p2 = tuple(pts[j][::-1])
+
+        cv2.line(skel, p1, p2, 1, 1)
+
+        dists[i, :] = np.inf
+        dists[:, i] = np.inf
+        dists[j, :] = np.inf
+        dists[:, j] = np.inf
+    return skel
+
 if __name__ == '__main__':
 
     H, W = 500,500
-    name = 'case_008'
+    name = 'case_126'
 
     mask1 = np.load(f'experiment/image/simulation/prediction_results/{name}_L.npz')
     # fusion1 = cv2.imread('tmp/gt_106.png', cv2.IMREAD_GRAYSCALE)
@@ -346,13 +387,9 @@ if __name__ == '__main__':
     mask2 = (mask2['probabilities'][1,0] > 0.5) * 1.0
     # quit()
 
-    cv2.imwrite('L.png', mask1*255)
-    cv2.imwrite('R.png', mask2*255)
-    quit()
-
     pts_order_L = []
     mask1 = fix_skel(mask1)
-    seq = traverse_curve(mask1, window_size=10, r_min=10, r_max=15, gap_threshold=3)
+    seq = traverse_curve(mask1, window_size=10, r_min=10, r_max=50, gap_threshold=3)
     pts_order_L.append(seq)
 
     # mask = np.zeros((H,W))
@@ -364,7 +401,7 @@ if __name__ == '__main__':
 
     pts_order_R = []
     mask2 = fix_skel(mask2)
-    seq = traverse_curve(mask2, window_size=10, r_min=10, r_max=15, gap_threshold=3)
+    seq = traverse_curve(mask2, window_size=10, r_min=10, r_max=50, gap_threshold=3)
     pts_order_R.append(seq)
 
     # seq_show = np.zeros((len(seq),2))
@@ -435,22 +472,4 @@ if __name__ == '__main__':
             pts_3d.append(pt_prev_3d)
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pts_3d)
-        o3d.io.write_point_cloud(f"output/real/rec_0.ply", pcd)
-
-        np.save('pts.npy', pts_3d)
-        quit()
-
-        pts_3d = np.array(pts_3d)
-        pts_2d = project_points(pts_3d, P2)
-        img = np.zeros((500,500))
-        for pt_2d in pts_2d:
-            img[np.int32(pt_2d[1]), np.int32(pt_2d[0])] = 255
-        cv2.imwrite('rec.png', img)
-
-        gt = o3d.io.read_point_cloud(f'output/real/gt_0.ply')
-        gt = np.asarray(gt.points)
-        pts_2d = project_points(gt, P2)
-        img = np.zeros((500,500))
-        for pt_2d in pts_2d:
-            img[np.int32(pt_2d[1]), np.int32(pt_2d[0])] = 255
-        cv2.imwrite('gt.png', img)
+        o3d.io.write_point_cloud(f"rec.ply", pcd)

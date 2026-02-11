@@ -103,8 +103,9 @@ def compute_acc_comp(
 
 if __name__ == '__main__':
 
-    category = 'simulation'
-    method = 'MonSter'
+    category = 'phantom'
+    method = 'TMI'
+    receive = 'point'
 
     data_path = f'ACCURATE_dataset/{category}'
     test_names = []
@@ -119,10 +120,11 @@ if __name__ == '__main__':
     sum_acc = 0
     sum_comp = 0
     for test_name in test_names:
+        if category == 'phantom' and int(test_name[-3:]) < 50: continue
         gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
         gt = np.asarray(gt.points)
 
-        rec = o3d.io.read_point_cloud(f'experiment/image/{category}/prediction_results/{test_name}.ply')
+        rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/{method}/{test_name}.ply')
         rec = np.asarray(rec.points)
 
         # if category == 'phantom':

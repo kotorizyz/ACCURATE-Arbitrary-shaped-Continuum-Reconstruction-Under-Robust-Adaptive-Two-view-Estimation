@@ -265,14 +265,18 @@ def inverse_img(img):
     return img_inv
 
 category = 'phantom'
-method = 'ACCURATE'
+method = 'MonSter'
+receive = 'mask'
+
+method = 'TMI'
+receive = 'point'
 
 if category == 'phantom':
-    path_rec = f'experiment/{category}/{method}/case_007.ply'
-    path_gt = f'ACCURATE_dataset/{category}/case_007/annotations/guidewire_3D.ply'
+    path_rec = f'experiment/{receive}/{category}/{method}/case_151.ply'
+    path_gt = f'ACCURATE_dataset/{category}/case_151/annotations/guidewire_3D.ply'
 else:
-    path_rec = f'experiment/{category}/{method}/case_003.ply'
-    path_gt = f'ACCURATE_dataset/{category}/case_003/annotations/guidewire_3D.ply'
+    path_rec = f'experiment/{receive}/{category}/{method}/case_005.ply'
+    path_gt = f'ACCURATE_dataset/{category}/case_005/annotations/guidewire_3D.ply'
 
 # P = np.load('pts.npy')
 # P = o3d.io.read_point_cloud(f'ctdataset/SE6/Segment_0.ply')
@@ -282,8 +286,14 @@ P_gt = np.asarray(P_gt.points)  # (N, 3)
 P_rec = o3d.io.read_point_cloud(path_rec)
 P_rec = np.asarray(P_rec.points)  # (N, 3)
 
+P_gt = P_gt * [[-1,-1,1]]
+P_rec = P_rec * [[-1,-1,1]]
+
 axes_cfg = compute_shared_axes(P_gt)
 views = [(20, 40), (10, -60)]
+
+# views = [(20, -100), (10, -60)]
+
 # 2. 分别画
 plot_pointcloud_with_axes(
     P_gt, axes_cfg, views,

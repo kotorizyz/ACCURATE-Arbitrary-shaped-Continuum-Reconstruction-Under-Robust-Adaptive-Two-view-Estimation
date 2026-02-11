@@ -157,8 +157,8 @@ def gctt(mask_L, mask_R, F):
     start_point_R = end_points_R[np.unravel_index(np.argmin(dist_endpoints), dist_endpoints.shape)[1]]
 
     # traversal
-    seq_L = traverse_curve(mask_L, start_point=start_point_L, r_min=10, r_max=15)
-    seq_R = traverse_curve(mask_R, start_point=start_point_R, r_min=10, r_max=15)
+    seq_L = traverse_curve(mask_L, start_point=start_point_L, r_min=10, r_max=50)
+    seq_R = traverse_curve(mask_R, start_point=start_point_R, r_min=10, r_max=50)
 
     return seq_L, seq_R
 
@@ -211,7 +211,7 @@ def reconstruction(seq_L, seq_R, matches, P1, P2):
 
 if __name__ == '__main__':
 
-    category = 'simulation'
+    category = 'phantom'
 
     data_path = f'experiment/image/{category}'
     test_names = []
@@ -225,7 +225,6 @@ if __name__ == '__main__':
         print(test_name)
         test_path = os.path.join(data_path, 'prediction_results')
 
-        # tempt mask
         mask_L = cv2.imread(os.path.join(test_path, f'{test_name}_L.png'), cv2.IMREAD_UNCHANGED)
         mask_R = cv2.imread(os.path.join(test_path, f'{test_name}_R.png'), cv2.IMREAD_UNCHANGED)
 
@@ -247,8 +246,7 @@ if __name__ == '__main__':
         R, T, E, F, P1, P2 = compute_stereo_params(K_L,K_R,R_L,R_R,t_L,t_R)
 
         seq_L, seq_R = gctt(mask_L, mask_R, F)
-
         matches = ecdp(seq_L, seq_R, F)
 
         pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
-        o3d.io.write_point_cloud(f"{test_path}/{test_name}.ply", pcd)
+        o3d.io.write_point_cloud(f"experiment/image/{category}/{test_name}.ply", pcd)
