@@ -103,8 +103,8 @@ def compute_acc_comp(
 
 if __name__ == '__main__':
 
-    category = 'phantom'
-    method = 'TMI'
+    category = 'simulation'
+    method = 'ACCURATE'
     receive = 'point'
 
     data_path = f'ACCURATE_dataset/{category}'

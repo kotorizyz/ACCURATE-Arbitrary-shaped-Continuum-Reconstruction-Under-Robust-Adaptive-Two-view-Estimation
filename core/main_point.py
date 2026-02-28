@@ -169,7 +169,6 @@ def ordered_visible_pixels(pts_uvz, H, W):
 
         if not (0 <= u_pix < W and 0 <= v_pix < H):
             continue
-
         if z < z_buffer[v_pix, u_pix]:
             z_buffer[v_pix, u_pix] = z
             idx_buffer[v_pix, u_pix] = i
@@ -225,10 +224,6 @@ def intersect_line_bspline(line, tck, num=2000):
     return pts
 
 def match_curve_monotonic(pts_L, F, tck_R):
-    """
-    return:
-        matched_R: 与左点一一对应的右点
-    """
 
     matched_R = []
     prev_pt = None
@@ -318,11 +313,84 @@ def reconstruction(seq_L, seq_R, matches, P1, P2):
     pcd.points = o3d.utility.Vector3dVector(pts_3d)
     return pcd
 
+def to_homogeneous(pts):
+    return np.hstack([pts, np.ones((pts.shape[0], 1))])
+
+def build_candidates(left_pts, right_pts, F, threshold=1.0):
+    left_h = to_homogeneous(left_pts)
+    right_h = to_homogeneous(right_pts)
+
+    candidates = []
+
+    for i in range(len(left_pts)):
+        l = F @ left_h[i]
+
+        a, b, c = l
+        norm = np.sqrt(a*a + b*b)
+
+        for j in range(len(right_pts)):
+            dist = abs(right_h[j] @ l) / norm
+            if dist < threshold:
+                candidates.append((i, j))
+
+    return candidates
+
+def longest_monotonic_matching(candidates):
+    # 按 i 排序
+    candidates = sorted(candidates)
+
+    n = len(candidates)
+    dp = [1] * n
+    parent = [-1] * n
+
+    for i in range(n):
+        for j in range(i):
+            if (candidates[j][0] < candidates[i][0] and
+                candidates[j][1] < candidates[i][1]):
+                if dp[j] + 1 > dp[i]:
+                    dp[i] = dp[j] + 1
+                    parent[i] = j
+
+    # 找最大
+    idx = np.argmax(dp)
+    seq = []
+
+    while idx != -1:
+        seq.append(candidates[idx])
+        idx = parent[idx]
+
+    return seq[::-1]
+
+def triangulate_points(matches, left_pts, right_pts, P1, P2):
+    points_3d = []
+
+    for i, j in matches:
+        x1 = np.append(left_pts[i], 1)
+        x2 = np.append(right_pts[j], 1)
+
+        A = np.array([
+            x1[0]*P1[2]-P1[0],
+            x1[1]*P1[2]-P1[1],
+            x2[0]*P2[2]-P2[0],
+            x2[1]*P2[2]-P2[1]
+        ])
+
+        _, _, Vt = np.linalg.svd(A)
+        X = Vt[-1]
+        X /= X[3]
+
+        points_3d.append(X[:3])
+
+    return np.array(points_3d)
+
 if __name__ == '__main__':
 
     category = 'phantom'
-    method = 'TMI'
-    H,W = 500, 500
+    method = 'TMI15'
+    if category == 'simulation':
+        H,W = 2048, 512
+    elif category == 'phantom':
+        H,W = 500, 500
 
     data_path = f'ACCURATE_dataset/{category}'
     test_names = []
@@ -355,25 +423,26 @@ if __name__ == '__main__':
         pts_uvz_R = project_with_depth(pts_3d, K_R, R_R, t_R)
         pts_2d_R, idx_R = ordered_visible_pixels(pts_uvz_R, H, W)
 
-        # img_L = np.zeros((H,W))
-        # for pt in pts_2d_L:
-        #     img_L[pt[1], pt[0]] = 255
-        # from skimage.morphology import skeletonize
-        # img_L = skeletonize(img_L>0).astype(np.uint8)
-        # y_L, x_L = np.where(img_L>0)
+        if category == 'phantom':
+            img_L = np.zeros((H,W))
+            for pt in pts_2d_L:
+                img_L[pt[1], pt[0]] = 255
+            from skimage.morphology import skeletonize
+            img_L = skeletonize(img_L>0).astype(np.uint8)
+            y_L, x_L = np.where(img_L>0)
 
-        # img_R = np.zeros((H,W))
-        # for pt in pts_2d_R:
-        #     img_R[pt[1], pt[0]] = 255
-        # from skimage.morphology import skeletonize
-        # img_R = skeletonize(img_R>0).astype(np.uint8)
-        # y_R, x_R = np.where(img_R>0)
+            img_R = np.zeros((H,W))
+            for pt in pts_2d_R:
+                img_R[pt[1], pt[0]] = 255
+            from skimage.morphology import skeletonize
+            img_R = skeletonize(img_R>0).astype(np.uint8)
+            y_R, x_R = np.where(img_R>0)
 
-        # pts_2d_L = np.array(traverse_curve(img_L, start_point=(y_L[-1], x_L[-1]), r_min=10, r_max=50))[:,::-1]
-        # pts_2d_R = np.array(traverse_curve(img_R, start_point=(y_R[-1], x_R[-1]), r_min=10, r_max=50))[:,::-1]
+            pts_2d_L = np.array(traverse_curve(img_L, start_point=(y_L[-1], x_L[-1]), r_min=10, r_max=50))[:,::-1]
+            pts_2d_R = np.array(traverse_curve(img_R, start_point=(y_R[-1], x_R[-1]), r_min=10, r_max=50))[:,::-1]
 
 
-        if method == 'TMI':
+        if method == 'TMI03':
             tck_R = fit_bspline_curve(pts_2d_R)
             matches_R = match_curve_monotonic(pts_2d_L, F, tck_R)
 
@@ -390,6 +459,18 @@ if __name__ == '__main__':
                 pts_3d_rec.append(pt_prev_3d)
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(pts_3d_rec)
+        
+        elif method == 'TMI15':
+            candidates = build_candidates(pts_2d_L, pts_2d_R, F, threshold=1.5)
+
+            matches = longest_monotonic_matching(candidates)
+
+            P1 = K_L @ np.hstack([R_L, t_L.reshape(-1,1)])
+            P2 = K_R @ np.hstack([R_R, t_R.reshape(-1,1)])
+
+            points_3d = triangulate_points(matches, pts_2d_L, pts_2d_R, P1, P2)
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(points_3d)
         
         elif method == 'ACCURATE':
             pts_2d_L = pts_2d_L[:,::-1]
