@@ -68,7 +68,7 @@ RECONSTRUCTION/
 
 ### 1️⃣ Segmentation (TSN)
 
-Train segmentation network (For demo we use simple Unet):
+Train segmentation network (For this demo we use simple Unet):
 
 ```bash
 python utils/seg_train.py
