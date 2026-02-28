@@ -1,0 +1,9 @@
+{
+    "case_id": "case_084",
+    "num_points": 2000,
+    "image_size": [
+        512,
+        2048
+    ],
+    "source": "simulation"
+}

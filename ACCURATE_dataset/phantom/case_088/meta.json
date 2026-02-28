@@ -1,0 +1,9 @@
+{
+    "case_id": "case_088",
+    "num_points": 5054,
+    "image_size": [
+        500,
+        500
+    ],
+    "source": "phantom"
+}
