@@ -21,19 +21,14 @@ def plot_pointcloud_two_views(P, save_prefix=None, cate = 'gt', axis_len_x = Non
     views = [(20, 40), (10, -60)]
     # views = [(30, -60), (30, 120)]
 
-
-    # 🎨 配色
     color_point = "#FC4F7E"
 
     for idx, (elev, azim) in enumerate(views):
         fig = plt.figure(figsize=(5,5))
         ax = fig.add_subplot(111, projection='3d')
-
-        # 点云
         ax.scatter(P[:,0], P[:,1], P[:,2],
                    s=4, c=color_point, alpha=0.95)
 
-        # 三轴
         origin = np.array([xmin, ymin, zmin])
         ax.quiver(origin[0], origin[1], origin[2],
           axis_len_x, 0, 0,
@@ -48,16 +43,15 @@ def plot_pointcloud_two_views(P, save_prefix=None, cate = 'gt', axis_len_x = Non
                 color='#000000', linewidth=2.5, arrow_length_ratio=0.08)
         
 
-        # grid_color = '#E6E6E6'   # 很淡的灰色
+        # grid_color = '#E6E6E6'
         grid_color = '#000000'
         grid_alpha = 0.6
-        grid_step = (axis_len_x + axis_len_y + axis_len_z) / 30  # 自动网格密度
+        grid_step = (axis_len_x + axis_len_y + axis_len_z) / 30
         color_xy = '#A7C7E7'   # very light blue
         color_yz = '#CDECCF'   # very light green
         color_zx = '#FFE1B5'   # very light orange
         plane_alpha = 0.3
 
-        # XY 平面 (Z = origin[2])
         xx = np.arange(origin[0], origin[0] + axis_len_x, grid_step)
         yy = np.arange(origin[1], origin[1] + axis_len_y, grid_step)
         XX, YY = np.meshgrid(xx, yy)
@@ -72,7 +66,6 @@ def plot_pointcloud_two_views(P, save_prefix=None, cate = 'gt', axis_len_x = Non
         )
         ax.plot_wireframe(XX, YY, ZZ, color=grid_color, alpha=grid_alpha, linewidth=0.5)
 
-        # YZ 平面 (X = origin[0])
         yy = np.arange(origin[1], origin[1] + axis_len_y, grid_step)
         zz = np.arange(origin[2], origin[2] + axis_len_z, grid_step)
         YY, ZZ = np.meshgrid(yy, zz)
@@ -87,7 +80,6 @@ def plot_pointcloud_two_views(P, save_prefix=None, cate = 'gt', axis_len_x = Non
         )
         ax.plot_wireframe(XX, YY, ZZ, color=grid_color, alpha=grid_alpha, linewidth=0.5)
 
-        # ZX 平面 (Y = origin[1])
         zz = np.arange(origin[2], origin[2] + axis_len_z, grid_step)
         xx = np.arange(origin[0], origin[0] + axis_len_x, grid_step)
         ZZ, XX = np.meshgrid(zz, xx)
@@ -102,23 +94,19 @@ def plot_pointcloud_two_views(P, save_prefix=None, cate = 'gt', axis_len_x = Non
         )
         ax.plot_wireframe(XX, YY, ZZ, color=grid_color, alpha=grid_alpha, linewidth=0.5)
 
-        # 轴标签
         ax.text(origin[0]+axis_len_x*1.2, origin[1], origin[2], 'X', color='#000000', fontsize=12)
         ax.text(origin[0], origin[1]+axis_len_y*1.1, origin[2], 'Y', color='#000000', fontsize=12)
         ax.text(origin[0], origin[1], origin[2]+axis_len_z*0.99, 'Z', color='#000000', fontsize=12)
 
-        # 范围
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_zlim(zmin, zmax)
 
-        # 极简外观
         ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
         ax.grid(False)
         ax.set_axis_off()
         ax.set_box_aspect([xmax-xmin, ymax-ymin, zmax-zmin])
 
-        # 视角
         ax.view_init(elev=elev, azim=azim)
 
         if save_prefix:
@@ -164,11 +152,9 @@ def plot_pointcloud_with_axes(P, axes_cfg, views, color, save_path=None):
         fig = plt.figure(figsize=(5,5))
         ax = fig.add_subplot(111, projection='3d')
 
-        # 点云
         ax.scatter(P[:,0], P[:,1], P[:,2],
                    s=4, c=color, alpha=0.95)
 
-        # 三轴
         origin = np.array([xmin, ymin, zmin])
         ax.quiver(origin[0], origin[1], origin[2],
           axis_len_x, 0, 0,
@@ -183,16 +169,15 @@ def plot_pointcloud_with_axes(P, axes_cfg, views, color, save_path=None):
                 color='#000000', linewidth=2.5, arrow_length_ratio=0.08)
         
 
-        # grid_color = '#E6E6E6'   # 很淡的灰色
+        # grid_color = '#E6E6E6'
         grid_color = '#000000'
         grid_alpha = 0.6
-        grid_step = (axis_len_x + axis_len_y + axis_len_z) / 30  # 自动网格密度
+        grid_step = (axis_len_x + axis_len_y + axis_len_z) / 30
         color_xy = '#A7C7E7'   # very light blue
         color_yz = '#CDECCF'   # very light green
         color_zx = '#FFE1B5'   # very light orange
         plane_alpha = 0.3
 
-        # XY 平面 (Z = origin[2])
         xx = np.arange(origin[0], origin[0] + axis_len_x, grid_step)
         yy = np.arange(origin[1], origin[1] + axis_len_y, grid_step)
         XX, YY = np.meshgrid(xx, yy)
@@ -207,7 +192,6 @@ def plot_pointcloud_with_axes(P, axes_cfg, views, color, save_path=None):
         )
         ax.plot_wireframe(XX, YY, ZZ, color=grid_color, alpha=grid_alpha, linewidth=0.5)
 
-        # YZ 平面 (X = origin[0])
         yy = np.arange(origin[1], origin[1] + axis_len_y, grid_step)
         zz = np.arange(origin[2], origin[2] + axis_len_z, grid_step)
         YY, ZZ = np.meshgrid(yy, zz)
@@ -222,7 +206,6 @@ def plot_pointcloud_with_axes(P, axes_cfg, views, color, save_path=None):
         )
         ax.plot_wireframe(XX, YY, ZZ, color=grid_color, alpha=grid_alpha, linewidth=0.5)
 
-        # ZX 平面 (Y = origin[1])
         zz = np.arange(origin[2], origin[2] + axis_len_z, grid_step)
         xx = np.arange(origin[0], origin[0] + axis_len_x, grid_step)
         ZZ, XX = np.meshgrid(zz, xx)
@@ -237,23 +220,19 @@ def plot_pointcloud_with_axes(P, axes_cfg, views, color, save_path=None):
         )
         ax.plot_wireframe(XX, YY, ZZ, color=grid_color, alpha=grid_alpha, linewidth=0.5)
 
-        # 轴标签
         ax.text(origin[0]+axis_len_x*1.2, origin[1], origin[2], 'X', color='#000000', fontsize=12)
         ax.text(origin[0], origin[1]+axis_len_y*1.1, origin[2], 'Y', color='#000000', fontsize=12)
         ax.text(origin[0], origin[1], origin[2]+axis_len_z*0.99, 'Z', color='#000000', fontsize=12)
 
-        # 范围
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_zlim(zmin, zmax)
 
-        # 极简外观
         ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
         ax.grid(False)
         ax.set_axis_off()
         ax.set_box_aspect([xmax-xmin, ymax-ymin, zmax-zmin])
 
-        # 视角
         ax.view_init(elev=elev, azim=azim)
         if save_path:
             plt.savefig(f"{save_path}_view{i+1}.png",
@@ -295,7 +274,6 @@ views = [(20, 40), (10, -60)]
 
 # views = [(20, -100), (10, -60)]
 
-# 2. 分别画
 plot_pointcloud_with_axes(
     P_gt, axes_cfg, views,
     color='#1F77B4',   # blue

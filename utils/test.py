@@ -56,30 +56,6 @@ def compute_acc_comp(
     pred: np.ndarray,
     tau: float = None,
 ):
-    """
-    Compute Accuracy / Completeness for point cloud reconstruction.
-
-    Parameters
-    ----------
-    gt : np.ndarray, shape [N, 3]
-        Ground truth point cloud
-    pred : np.ndarray, shape [N', 3]
-        Reconstructed point cloud
-    tau : float or None
-        Threshold (e.g., 0.5 or 1.0 in mm).
-        If None, only continuous Acc / Comp are returned.
-
-    Returns
-    -------
-    results : dict
-        {
-            'acc': float,
-            'comp': float,
-            'acc_tau': float (optional),
-            'comp_tau': float (optional),
-            'fscore': float (optional)
-        }
-    """
 
     gt = np.asarray(gt, dtype=np.float32)
     pred = np.asarray(pred, dtype=np.float32)
@@ -120,7 +96,7 @@ if __name__ == '__main__':
     sum_acc = 0
     sum_comp = 0
     for test_name in test_names:
-        if category == 'phantom' and int(test_name[-3:]) < 50: continue
+        if category == 'phantom' and int(test_name[-3:]) < 50: continue # There is something wrong with the GT of phantom 1-49, we didn't use the result of case 1 in paper for all methods. Skip them for now.
         gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
         gt = np.asarray(gt.points)
 
@@ -139,7 +115,7 @@ if __name__ == '__main__':
         sum_max_err += max_err
         sum_acc += acc
         sum_comp += comp
-        print(test_name, acc, comp, mae, max_err)
+        # print(test_name, acc, comp, mae, max_err)
     print(f'Average MAE: {sum_mae/len(test_names)}')
     print(f'Average Accuracy: {sum_acc/len(test_names)}')
     print(f'Average Completeness: {sum_comp/len(test_names)}')

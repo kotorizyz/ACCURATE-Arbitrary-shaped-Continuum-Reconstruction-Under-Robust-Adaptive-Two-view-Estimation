@@ -105,12 +105,6 @@ def reconstruct_points_optimize_depth_scale_camera(
     dilation_radius=2,
     iters=3
 ):
-    """
-    在相机坐标系下优化深度尺度 alpha，
-    再变换到世界坐标系，与 GT 对齐
-    """
-
-    # ---------- 1. mask 膨胀 ----------
     if dilation_radius > 0:
         kernel = np.ones((2*dilation_radius+1, 2*dilation_radius+1), np.uint8)
         mask_use = cv2.dilate(mask.astype(np.uint8), kernel) > 0
@@ -123,7 +117,6 @@ def reconstruct_points_optimize_depth_scale_camera(
     valid = Z > 0
     xs, ys, Z = xs[valid], ys[valid], Z[valid]
 
-    # ---------- 2. 像素 → 相机坐标（alpha = 1） ----------
     fx, fy = K[0, 0], K[1, 1]
     cx, cy = K[0, 2], K[1, 2]
 
@@ -132,7 +125,6 @@ def reconstruct_points_optimize_depth_scale_camera(
 
     pts_cam = np.stack([X, Y, Z], axis=1)  # (N,3)
 
-    # 预计算 R * x_c
     A = (R @ pts_cam.T).T   # (N,3)
 
     tree = cKDTree(pts_3d_gt)
@@ -187,7 +179,6 @@ def depth_mask_to_world(
         pts_world: (N, 3)
     """
 
-    # ---------- 1. mask -> pixel coordinates ----------
     v, u = np.where(maskL == 1)   # v: row (y), u: col (x)
 
     assert len(depth_eff_pred) == len(u)
@@ -197,14 +188,12 @@ def depth_mask_to_world(
     fx, fy = K[0, 0], K[1, 1]
     cx, cy = K[0, 2], K[1, 2]
 
-    # ---------- 2. pixel + depth -> camera coordinates ----------
     Xc = (u - cx) * Z / fx
     Yc = (v - cy) * Z / fy
     Zc = Z
 
     pts_cam = np.stack([Xc, Yc, Zc], axis=1)   # (N, 3)
 
-    # ---------- 3. camera -> world ----------
     R = R.astype(np.float64)
     t = t.reshape(3,).astype(np.float64)
 

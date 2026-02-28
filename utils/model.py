@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
-# tempt unet for checking
+# tmp unet for demo
 class ConvBlock(nn.Module):
     def __init__(self, in_ch, out_ch, mid_ch=None):
         super().__init__()

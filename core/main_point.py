@@ -119,7 +119,7 @@ def project_points(pts_3d, K, R, t):
 def project_with_depth(pts_3d, K, R, t):
     pts_cam = R @ pts_3d.T + t.reshape(3,1)   # [3,N]
 
-    z = pts_cam[2]                            # 深度
+    z = pts_cam[2]
 
     pts_img = K @ pts_cam
     u = pts_img[0] / z
@@ -128,13 +128,7 @@ def project_with_depth(pts_3d, K, R, t):
     return np.stack([u, v, z], axis=1)        # [N,3]
 
 def visible_order(pts_uvz, H, W):
-    """
-    pts_uvz: [N,3]  (u, v, depth) 按曲线顺序
-    return:
-        visible_indices: 在图像中真正可见的原始索引顺序
-    """
 
-    # 初始化Z-buffer
     z_buffer = np.full((H, W), np.inf)
     idx_buffer = -np.ones((H, W), dtype=int)
 
@@ -143,16 +137,13 @@ def visible_order(pts_uvz, H, W):
         u_pix = int(round(u))
         v_pix = int(round(v))
 
-        # 越界跳过
         if not (0 <= u_pix < W and 0 <= v_pix < H):
             continue
 
-        # Z-buffer判定
         if z < z_buffer[v_pix, u_pix]:
             z_buffer[v_pix, u_pix] = z
             idx_buffer[v_pix, u_pix] = i
 
-    # 提取可见点索引，并按原曲线顺序排序
     visible_indices = np.unique(idx_buffer[idx_buffer >= 0])
     visible_indices.sort()
 
@@ -336,7 +327,6 @@ def build_candidates(left_pts, right_pts, F, threshold=1.0):
     return candidates
 
 def longest_monotonic_matching(candidates):
-    # 按 i 排序
     candidates = sorted(candidates)
 
     n = len(candidates)
@@ -351,7 +341,6 @@ def longest_monotonic_matching(candidates):
                     dp[i] = dp[j] + 1
                     parent[i] = j
 
-    # 找最大
     idx = np.argmax(dp)
     seq = []
 

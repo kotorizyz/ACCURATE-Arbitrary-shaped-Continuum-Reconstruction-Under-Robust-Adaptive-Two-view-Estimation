@@ -34,15 +34,8 @@ def fix_single_pixel_gaps(mask, max_gap=1):
     return skel.astype(np.uint8)
 
 def thicken_skeleton(skel, thickness=3):
-    """
-    skel: 2D binary skeleton image (0 or 255 / True or False)
-    thickness: 线宽 (推荐 2~6)
-    """
-
-    # 确保是uint8二值
     skel_bin = (skel > 0).astype(np.uint8) * 255
 
-    # 构造圆形结构元素（比方形更自然）
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, 
         (thickness, thickness)

@@ -49,12 +49,10 @@ for left_path, right_path in zip(images_left, images_right):
         cv2.imwrite("left.png", img_left)
         cv2.imwrite("right.png", img_right)
 
-# 单目标定
 ret_l, mtx_l, dist_l, rvecs_l, tvecs_l = cv2.calibrateCamera(objpoints, imgpoints_left, gray_left.shape[::-1], None, None)
 ret_r, mtx_r, dist_r, rvecs_r, tvecs_r = cv2.calibrateCamera(objpoints, imgpoints_right, gray_right.shape[::-1], None, None)
 
-# 双目标定
-flags = cv2.CALIB_FIX_INTRINSIC  # 固定内参，只优化外参
+flags = cv2.CALIB_FIX_INTRINSIC
 criteria_stereo = (cv2.TERM_CRITERIA_MAX_ITER + cv2.TERM_CRITERIA_EPS, 100, 1e-5)
 
 ret, _, _, _, _, R, T, E, F = cv2.stereoCalibrate(
@@ -62,8 +60,6 @@ ret, _, _, _, _, R, T, E, F = cv2.stereoCalibrate(
     mtx_l, dist_l, mtx_r, dist_r,
     gray_left.shape[::-1], criteria=criteria_stereo, flags=flags
 )
-print("旋转矩阵 R:\n", R)
-print("平移向量 T:\n", T)
 
 print(dist_l)
 print(dist_r)
@@ -89,4 +85,3 @@ np.savez("stereo_params.npz",
          mtx_r=mtx_r, dist_r=dist_r,
          R=R, T=T, E=E, F=F,
          R1=R1, R2=R2, P1=P1, P2=P2, Q=Q)
-print("标定参数已保存到 stereo_params.npz")
