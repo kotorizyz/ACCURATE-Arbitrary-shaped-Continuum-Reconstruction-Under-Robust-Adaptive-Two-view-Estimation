@@ -49,12 +49,12 @@ RECONSTRUCTION/
 ├── utils/                   # utilities
 │   ├── calibration.py       # camera geometry & triangulation
 │   ├── model.py             # segmentation network definition
-│   ├── seg_train.py         # TSN training
+│   ├── seg_train.py         # segment network training
 │   ├── seg_test.py          # segmentation inference
 │   ├── seg_3d.py            # 3D reconstruction helpers
 │   ├── process_figures.py   # preprocessing utilities
 │   ├── draw_fig.py          # visualization
-│   └── test.py
+│   └── test.py              # reproducing paper results
 │
 ├── experiment/              # experiment results
 ├── original_data/           # raw data
