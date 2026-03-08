@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import open3d as o3d
+import argparse
 
 def plot_pointcloud_two_views(P, save_prefix=None, cate = 'gt', axis_len_x = None, axis_len_y = None, axis_len_z = None):
     assert P.shape[1] == 3
@@ -243,54 +244,78 @@ def inverse_img(img):
     img_inv = np.abs(img_f - 255)
     return img_inv
 
-category = 'simulation'
-method = 'vggt'
-receive = 'mask'
 
-# method = 'TMI03'
-# receive = 'point'
+if __name__ == '__main__':
 
-if category == 'phantom':
-    path_rec = f'experiment/{receive}/{category}/{method}/case_151.ply'
-    path_gt = f'ACCURATE_dataset/{category}/case_151/annotations/guidewire_3D.ply'
-else:
-    path_rec = f'experiment/{receive}/{category}/{method}/case_052.ply'
-    path_gt = f'ACCURATE_dataset/{category}/case_052/annotations/guidewire_3D.ply'
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--category',
+        type=str,
+        default='simulation',
+        help='Dataset category: simulation or phantom (default: simulation)'
+    )
 
-# P = np.load('pts.npy')
-# P = o3d.io.read_point_cloud(f'ctdataset/SE6/Segment_0.ply')
-# P = o3d.io.read_point_cloud('output/rec_0.ply')
-P_gt = o3d.io.read_point_cloud(path_gt)
-P_gt = np.asarray(P_gt.points)  # (N, 3)
-P_rec = o3d.io.read_point_cloud(path_rec)
-P_rec = np.asarray(P_rec.points)  # (N, 3)
+    parser.add_argument(
+        '--receive',
+        type=str,
+        default='mask',
+        help='Input type: image, mask or point (default: mask)'
+    )
 
-if category == 'phantom':
-    P_gt = P_gt * [[-1,-1,1]]
-    P_rec = P_rec * [[-1,-1,1]]
+    parser.add_argument(
+        '--method',
+        type=str,
+        default='ACCURATE',
+        help='Reconstruction method: ACCURATE/TMI03/TMI15/vggt/Fast3R/MonSter (default: ACCURATE)'
+    )
+    args = parser.parse_args()
 
-axes_cfg = compute_shared_axes(P_gt)
-views = [(20, 40), (10, -60)]
 
-# views = [(20, -100), (10, -60)]
+    category = args.category
+    method = args.method
+    receive = args.receive
 
-plot_pointcloud_with_axes(
-    P_gt, axes_cfg, views,
-    color='#1F77B4',   # blue
-    save_path='gt'
-)
+    if category == 'phantom':
+        path_rec = f'experiment/{receive}/{category}/{method}/case_151.ply'
+        path_gt = f'ACCURATE_dataset/{category}/case_151/annotations/guidewire_3D.ply'
+    else:
+        path_rec = f'experiment/{receive}/{category}/{method}/case_003.ply'
+        path_gt = f'ACCURATE_dataset/{category}/case_003/annotations/guidewire_3D.ply'
 
-plot_pointcloud_with_axes(
-    P_rec, axes_cfg, views,
-    color='#FC4F7E',   # pink
-    save_path='rec'
-)
+    # P = np.load('pts.npy')
+    # P = o3d.io.read_point_cloud(f'ctdataset/SE6/Segment_0.ply')
+    # P = o3d.io.read_point_cloud('output/rec_0.ply')
+    P_gt = o3d.io.read_point_cloud(path_gt)
+    P_gt = np.asarray(P_gt.points)  # (N, 3)
+    P_rec = o3d.io.read_point_cloud(path_rec)
+    P_rec = np.asarray(P_rec.points)  # (N, 3)
 
-# mask_L = cv2.imread('mask/mask_L_0.png', cv2.IMREAD_GRAYSCALE)
-# mask_R = cv2.imread('mask/mask_R_0.png', cv2.IMREAD_GRAYSCALE)
+    if category == 'phantom':
+        P_gt = P_gt * [[-1,-1,1]]
+        P_rec = P_rec * [[-1,-1,1]]
 
-# mask_L = inverse_img(mask_L)
-# mask_R = inverse_img(mask_R)
+    axes_cfg = compute_shared_axes(P_gt)
+    views = [(20, 40), (10, -60)]
 
-# cv2.imwrite('mask_L_inverted.png', mask_L)
-# cv2.imwrite('mask_R_inverted.png', mask_R)
+    # views = [(20, -100), (10, -60)]
+
+    plot_pointcloud_with_axes(
+        P_gt, axes_cfg, views,
+        color='#1F77B4',   # blue
+        save_path='gt'
+    )
+
+    plot_pointcloud_with_axes(
+        P_rec, axes_cfg, views,
+        color='#FC4F7E',   # pink
+        save_path='rec'
+    )
+
+    # mask_L = cv2.imread('mask/mask_L_0.png', cv2.IMREAD_GRAYSCALE)
+    # mask_R = cv2.imread('mask/mask_R_0.png', cv2.IMREAD_GRAYSCALE)
+
+    # mask_L = inverse_img(mask_L)
+    # mask_R = inverse_img(mask_R)
+
+    # cv2.imwrite('mask_L_inverted.png', mask_L)
+    # cv2.imwrite('mask_R_inverted.png', mask_R)

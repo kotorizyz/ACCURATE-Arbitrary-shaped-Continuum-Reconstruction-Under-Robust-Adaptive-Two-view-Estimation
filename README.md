@@ -45,17 +45,17 @@ RECONSTRUCTION/
 ├── core/                    # reconstruction algorithms
 │   ├── main.py              # full reconstruction pipeline
 │   ├── main_point.py        # reconstruction using ordered points
-│   ├── cur_dp.py            # ECDP dynamic programming
-│   └── cur_dp_simple.py     # simplified DP implementation
+│   ├── cur_dp.py            # GCTT + ECDP
+│   └── cur_dp_simple.py     # simplified GCTT + ECDP
 │
 ├── utils/                   # utilities
-│   ├── calibration.py       # camera geometry & triangulation
-│   ├── model.py             # segmentation network definition
+│   ├── calibration.py       # camera geometry calibration
+│   ├── model.py             # segmentation network definition for demo
 │   ├── seg_train.py         # segment network training
 │   ├── seg_test.py          # segmentation inference
-│   ├── seg_3d.py            # 3D reconstruction helpers
-│   ├── process_figures.py   # preprocessing utilities
-│   ├── draw_fig.py          # visualization
+│   ├── seg_3d.py            # 3D reconstruction result process for benchmark methods
+│   ├── process_figures.py   
+│   ├── draw_fig.py          # visualization for paper
 │   └── test.py              # reproducing paper results
 │
 ├── experiment/              # experiment results
@@ -90,9 +90,9 @@ centerline masks
 
 ---
 
-### 2️⃣ Full Reconstruction Pipeline
+### 2️⃣ Reconstruction Pipeline
 
-Run end-to-end reconstruction:
+Quick run reconstruction based on GT masks:
 
 ```bash
 python core/main.py
@@ -101,9 +101,7 @@ python core/main.py
 Pipeline:
 
 ```
-Images
-  ↓
-Segmentation (TSN)
+Masks
   ↓
 Topology Traversal (GCTT)
   ↓
@@ -123,47 +121,6 @@ python core/main_point.py
 ```
 
 This bypasses segmentation and traversal.
-
----
-
-## 🧠 Core Algorithms
-
-### Geometry-consistent Curve Topology Traversal (GCTT)
-
-* Recovers curve ordering from unordered skeleton pixels
-* Uses curvature, direction, and distance constraints
-* Robust to occlusions and missing pixels
-
-Implemented in:
-
-```
-core/main.py
-```
-
----
-
-### Epipolar-constrained Dynamic Programming (ECDP)
-
-* Builds global correspondence matrix
-* Minimizes cumulative point-to-epipolar-line distance
-* Preserves topology ordering
-* Handles one-to-many ambiguities via refinement
-
-Implemented in:
-
-```
-core/cur_dp.py
-```
-
----
-
-### Triangulation
-
-3D points are reconstructed using calibrated stereo geometry:
-
-```
-utils/calibration.py
-```
 
 ---
 
@@ -188,9 +145,8 @@ python utils/draw_fig.py
 
 Outputs:
 
+* GT 3D curves
 * reconstructed 3D curves
-* projection overlays
-* comparison figures
 
 ---
 

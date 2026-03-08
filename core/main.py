@@ -219,7 +219,7 @@ if __name__ == '__main__':
         '--category',
         type=str,
         default='phantom',
-        help='Dataset category: simulation or phantom (default: phantom)'
+        help='Dataset category: simulation or phantom (default: simulation)'
     )
 
     parser.add_argument(
