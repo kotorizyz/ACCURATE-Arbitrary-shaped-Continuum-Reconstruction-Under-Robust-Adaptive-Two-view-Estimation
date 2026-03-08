@@ -7,6 +7,7 @@ import torch
 import open3d as o3d
 import os
 import matplotlib.pyplot as plt
+import argparse
 
 def get_candidates(mask, curr, visited, r_min=1, r_max=2):
     H, W = mask.shape
@@ -374,8 +375,23 @@ def triangulate_points(matches, left_pts, right_pts, P1, P2):
 
 if __name__ == '__main__':
 
-    category = 'phantom'
-    method = 'TMI15'
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--category',
+        type=str,
+        default='phantom',
+        help='Dataset category: simulation or phantom (default: phantom)'
+    )
+    parser.add_argument(
+        '--method',
+        type=str,
+        default='ACCURATE',
+        help='Reconstruction method: ACCURATE/TMI03/TMI15 (default: ACCURATE)'
+    )
+    args = parser.parse_args()
+    category = args.category
+    method = args.method
+
     if category == 'simulation':
         H,W = 2048, 512
     elif category == 'phantom':
@@ -390,7 +406,7 @@ if __name__ == '__main__':
             fileline = f.readline()
 
     for test_name in test_names:
-        print(test_name)
+        # print(test_name)
         test_path = os.path.join(data_path, test_name)
 
         pts_3d = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')

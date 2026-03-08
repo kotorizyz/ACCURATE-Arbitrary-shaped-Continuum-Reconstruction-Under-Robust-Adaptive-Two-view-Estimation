@@ -3,6 +3,8 @@ import open3d as o3d
 from scipy.spatial import cKDTree
 from skimage.morphology import skeletonize_3d
 
+import argparse
+
 def point_to_segment_distances(points, seg_start, seg_end):
     P = points[:, None, :]          # (M,1,3)
     A = seg_start[None, :, :]       # (1,S,3)
@@ -79,11 +81,33 @@ def compute_acc_comp(
 
 if __name__ == '__main__':
 
-    category = 'simulation'
-    method = 'ACCURATE'
-    receive = 'point'
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--category',
+        type=str,
+        default='phantom',
+        help='Dataset category: simulation or phantom (default: phantom)'
+    )
 
-    data_path = f'ACCURATE_dataset/{category}'
+    parser.add_argument(
+        '--receive',
+        type=str,
+        default='mask',
+        help='Input type: image, mask or point (default: mask)'
+    )
+
+    parser.add_argument(
+        '--method',
+        type=str,
+        default='ACCURATE',
+        help='Reconstruction method: ACCURATE/TMI03/TMI15/vggt/Fast3R/MonSter (default: ACCURATE)'
+    )
+    args = parser.parse_args()
+
+    category = args.category
+    receive = args.receive
+    method = args.method
+
     test_names = []
     with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
         line = f.readline()
@@ -100,7 +124,13 @@ if __name__ == '__main__':
         gt = o3d.io.read_point_cloud(f'ACCURATE_dataset/{category}/{test_name}/annotations/guidewire_3D.ply')
         gt = np.asarray(gt.points)
 
-        rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/{method}/{test_name}.ply')
+        if receive == 'image':
+            rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/prediction_results/{test_name}.ply')
+        elif receive == 'mask':
+            rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/{method}/{test_name}.ply')
+        elif receive == 'point':
+            rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/{method}/{test_name}.ply')
+
         rec = np.asarray(rec.points)
 
         # if category == 'phantom':

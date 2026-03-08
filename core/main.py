@@ -7,6 +7,8 @@ import torch
 import open3d as o3d
 import os
 
+import argparse
+
 def compute_stereo_params(K1,K2,R1,R2,t1,t2):
     R = R2 @ R1.T
     T = t2 - R @ t1
@@ -162,7 +164,7 @@ def gctt(mask_L, mask_R, F):
 
     return seq_L, seq_R
 
-def ecdp(seq_L, seq_R, F):
+def ecdp(seq_L, seq_R, F, refine):
     D = np.abs(calculate_epi_dist(np.array(seq_L), np.array(seq_R), F))
     N1, N2 = D.shape
     C = np.zeros_like(D, dtype=float)
@@ -211,9 +213,47 @@ def reconstruction(seq_L, seq_R, matches, P1, P2):
 
 if __name__ == '__main__':
 
-    category = 'phantom'
+    parser = argparse.ArgumentParser(description="Wire reconstruction experiment settings")
 
-    data_path = f'experiment/image/{category}'
+    parser.add_argument(
+        '--category',
+        type=str,
+        default='phantom',
+        help='Dataset category: simulation or phantom (default: phantom)'
+    )
+
+    parser.add_argument(
+        '--receive',
+        type=str,
+        default='mask',
+        help='Input type: image or mask (default: mask)'
+    )
+
+    parser.add_argument(
+        '--method',
+        type=str,
+        default='ACCURATE',
+        help='Reconstruction method (default: ACCURATE)'
+    )
+
+    parser.add_argument(
+        '--refine',
+        action='store_true',
+        help='Enable refinement step (default: False)'
+    )
+
+    args = parser.parse_args()
+
+    category = args.category
+    receive = args.receive
+    method = args.method
+    refine = args.refine
+
+    if receive == 'image':
+        data_path = f'experiment/{receive}/{category}/prediction_results'
+    elif receive == 'mask':
+        data_path = f'ACCURATE_dataset/{category}'
+    
     test_names = []
     with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
         fileline = f.readline()
@@ -222,17 +262,17 @@ if __name__ == '__main__':
             fileline = f.readline()
 
     for test_name in test_names:
-        print(test_name)
-        test_path = os.path.join(data_path, 'prediction_results')
-
-        mask_L = cv2.imread(os.path.join(test_path, f'{test_name}_L.png'), cv2.IMREAD_UNCHANGED)
-        mask_R = cv2.imread(os.path.join(test_path, f'{test_name}_R.png'), cv2.IMREAD_UNCHANGED)
-
-        mask_L = skeletonize(mask_L>0).astype(np.uint8)
-        mask_R = skeletonize(mask_R>0).astype(np.uint8)
-        mask_L, _ = fix_gaps(mask_L, 10)
-        mask_R, _ = fix_gaps(mask_R, 10)
-        # print(mask_L.shape, mask_L.max(), mask_L.min())
+        # print(test_name)
+        if receive == 'image':
+            mask_L = cv2.imread(os.path.join(data_path, f'{test_name}_L.png'), cv2.IMREAD_UNCHANGED)
+            mask_R = cv2.imread(os.path.join(data_path, f'{test_name}_R.png'), cv2.IMREAD_UNCHANGED)
+        elif receive == 'mask':
+            mask_L = cv2.imread(os.path.join(data_path, test_name, 'masks/mask_L.png'), cv2.IMREAD_UNCHANGED)
+            mask_R = cv2.imread(os.path.join(data_path, test_name, 'masks/mask_R.png'), cv2.IMREAD_UNCHANGED)
+        
+        if category == 'phantom':
+            mask_L = skeletonize(mask_L>0).astype(np.uint8)
+            mask_R = skeletonize(mask_R>0).astype(np.uint8)
 
         # camera params
         K_L = np.loadtxt(f'ACCURATE_dataset/{category}/{test_name}/calibration/K_L.txt')
@@ -249,4 +289,4 @@ if __name__ == '__main__':
         matches = ecdp(seq_L, seq_R, F)
 
         pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
-        o3d.io.write_point_cloud(f"experiment/image/{category}/{test_name}.ply", pcd)
+        o3d.io.write_point_cloud(f"experiment/{receive}/{category}/{method}/{test_name}.ply", pcd)
