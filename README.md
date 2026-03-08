@@ -33,6 +33,8 @@ The pipeline consists of three sequential stages:
 
 The method achieves **sub-millimeter reconstruction accuracy** on both simulated and real phantom datasets .
 
+![reconstruction](figures/rec.png)
+
 ---
 
 ## 📂 Repository Structure

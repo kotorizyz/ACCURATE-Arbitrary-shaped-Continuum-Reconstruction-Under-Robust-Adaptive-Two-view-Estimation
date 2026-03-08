@@ -279,8 +279,8 @@ if __name__ == '__main__':
         path_rec = f'experiment/{receive}/{category}/{method}/case_151.ply'
         path_gt = f'ACCURATE_dataset/{category}/case_151/annotations/guidewire_3D.ply'
     else:
-        path_rec = f'experiment/{receive}/{category}/{method}/case_003.ply'
-        path_gt = f'ACCURATE_dataset/{category}/case_003/annotations/guidewire_3D.ply'
+        path_rec = f'experiment/{receive}/{category}/{method}/case_005.ply'
+        path_gt = f'ACCURATE_dataset/{category}/case_005/annotations/guidewire_3D.ply'
 
     # P = np.load('pts.npy')
     # P = o3d.io.read_point_cloud(f'ctdataset/SE6/Segment_0.ply')
