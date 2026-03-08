@@ -2,13 +2,15 @@
 
 Official implementation of:
 
-**ACCURATE: Arbitrary-shaped Continuum Reconstruction Under Robust Adaptive Two-view Estimation (MICCAI 2026)**
+**ACCURATE: Arbitrary-shaped Continuum Reconstruction Under Robust Adaptive Two-view Estimation**
 
 ---
 
 ## 📌 Overview
 
-ACCURATE is a geometry-aware framework for accurate **3D reconstruction of arbitrary-shaped long slender continuum structures** (e.g., guidewires, catheters, and continuum robots) from **biplanar X-ray images**.
+![pipeline](figures/full_process_v4.png)
+
+ACCURATE is a geometry-aware framework for accurate **3D reconstruction of arbitrary-shaped long slender continuum structures** (e.g., guidewires, catheters, and continuum robots) from **biplanar images**.
 
 Unlike end-to-end learning-based reconstruction methods, ACCURATE explicitly integrates:
 
