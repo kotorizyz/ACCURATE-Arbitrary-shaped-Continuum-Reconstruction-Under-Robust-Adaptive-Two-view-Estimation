@@ -85,8 +85,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--category',
         type=str,
-        default='phantom',
-        help='Dataset category: simulation or phantom (default: phantom)'
+        default='simulation',
+        help='Dataset category: simulation or phantom (default: simulation)'
     )
 
     parser.add_argument(

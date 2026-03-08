@@ -82,6 +82,23 @@ def get_candidates(mask, curr, visited, r_min=1, r_max=2):
         if(len(candidates) > 0): break
     return candidates
 
+def find_duplicate_segments_idx(idx_L):
+    segments = []
+    n = len(idx_L)
+    start = 0
+    while start < n:
+        end = start + 1
+
+        while end < n and idx_L[end] == idx_L[start]:
+            end += 1
+
+        if end - start > 1:
+            segments.append((start, end))
+
+        start = end
+
+    return segments
+
 def fit_curve(points):
     pts = np.array(points)
     if len(points)<3:
@@ -164,7 +181,7 @@ def gctt(mask_L, mask_R, F):
 
     return seq_L, seq_R
 
-def ecdp(seq_L, seq_R, F, refine):
+def ecdp(seq_L, seq_R, F, P1, P2, refine = False):
     D = np.abs(calculate_epi_dist(np.array(seq_L), np.array(seq_R), F))
     N1, N2 = D.shape
     C = np.zeros_like(D, dtype=float)
@@ -189,24 +206,63 @@ def ecdp(seq_L, seq_R, F, refine):
                 C[i,j] = C[i-1,j-1] + D[i,j]
                 parent[i,j] = [i-1, j-1]
 
-    path = []
+    matches = []
     i, j = N1-1, N2-1
     while i != -1 and j != -1:
-        path.append((i,j))
+        matches.append((i,j))
         pi, pj = parent[i,j]
         i, j = pi, pj
+    matches.reverse()
 
-    path.reverse()
-    return path
-
-def reconstruction(seq_L, seq_R, matches, P1, P2):
     pts_3d = []
+    pts_L = []
+    pts_R = []
+    idx_L = []
+    idx_R = []
     for match in matches:
         pt_L = np.array(seq_L[match[0]][::-1], dtype=np.float32).reshape(2, 1)
         pt_R = np.array(seq_R[match[1]][::-1], dtype=np.float32).reshape(2, 1)
-        points4D = cv2.triangulatePoints(P1, P2, pt_L, pt_R)
-        pt_3d = (points4D[:3] / points4D[3]).flatten()
-        pts_3d.append(pt_3d)
+        if not refine:
+            points4D = cv2.triangulatePoints(P1, P2, pt_L, pt_R)
+            pt_3d = (points4D[:3] / points4D[3]).flatten()
+            pts_3d.append(pt_3d)
+        else:
+            pts_L.append(pt_L)
+            pts_R.append(pt_R)
+            idx_L.append(match[0])
+            idx_R.append(match[1])
+    if refine:
+        idx_L_repeat = find_duplicate_segments_idx(idx_L)
+        for seg in idx_L_repeat:
+            idx_seg_L = idx_L[seg[0]:seg[1]]
+            idx_seg_R = idx_R[seg[0]:seg[1]]
+            seg_D = D[[idx_seg_L[0]]][:, idx_seg_R][0]
+            j_s = np.argmin(seg_D, axis=0)
+            for j in range(0, j_s):
+                if idx_seg_L[j] == 0: break
+                pt_L_i = pts_L[seg[0]+j]
+                pt_L_im1 = pts_L[seg[0]+j-1]
+                ij = (idx_seg_L[j], idx_seg_R[j])
+                D_ij = D[ij]
+                D_im1j = D[idx_seg_L[j]-1, idx_seg_R[j]]
+                pt_L_eff = D_ij/(D_ij+D_im1j)*pt_L_im1 + D_im1j/(D_ij+D_im1j)*pt_L_i
+                pts_L[seg[0]+j] = pt_L_eff
+            for j in range(j_s+1, seg[1]-seg[0]):
+                if idx_seg_L[j] == N1-1: break
+                pt_L_i = pts_L[seg[0]+j]
+                pt_L_ip1 = pts_L[seg[0]+j+1]
+                ij = (idx_seg_L[j], idx_seg_R[j])
+                D_ij = D[ij]
+                D_ip1j = D[idx_seg_L[j]+1, idx_seg_R[j]]
+                pt_L_eff = D_ij/(D_ij+D_ip1j)*pt_L_ip1 + D_ip1j/(D_ij+D_ip1j)*pt_L_i
+                pts_L[seg[0]+j] = pt_L_eff
+        for i in range(len(pts_L)):
+            pt_L = pts_L[i]
+            pt_R = pts_R[i]
+            points4D = cv2.triangulatePoints(P1, P2, pt_L, pt_R)
+            pt_3d = (points4D[:3] / points4D[3]).flatten()
+            pts_3d.append(pt_3d)
+
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pts_3d)
     return pcd
@@ -218,7 +274,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--category',
         type=str,
-        default='phantom',
+        default='simulation',
         help='Dataset category: simulation or phantom (default: simulation)'
     )
 
@@ -286,7 +342,7 @@ if __name__ == '__main__':
         R, T, E, F, P1, P2 = compute_stereo_params(K_L,K_R,R_L,R_R,t_L,t_R)
 
         seq_L, seq_R = gctt(mask_L, mask_R, F)
-        matches = ecdp(seq_L, seq_R, F)
+        pcd = ecdp(seq_L, seq_R, F, P1, P2, refine)
 
-        pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
+        # pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
         o3d.io.write_point_cloud(f"experiment/{receive}/{category}/{method}/{test_name}.ply", pcd)
