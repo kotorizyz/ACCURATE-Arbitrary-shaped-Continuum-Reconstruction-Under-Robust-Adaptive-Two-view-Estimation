@@ -8,7 +8,7 @@ This dataset accompanies the paper:
 - 135 simulated cases with complex synthetic slender geometries
 - Each case contains:
   - Two-view X-ray images
-  - Binary segmentation masks
+  - Binary segmentation masks (2D GT, from the projection of 3D GT)
   - Camera calibration (intrinsic & extrinsic)
   - Ground-truth 3D centerline point cloud
 
