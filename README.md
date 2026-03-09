@@ -78,34 +78,12 @@ RECONSTRUCTION/
 
 ## 🚀 Usage
 
-### 1️⃣ Segmentation (TSN)
+### 1️⃣ Reconstruction Pipeline
 
-Train segmentation network (For this demo we use simple Unet):
-
-```bash
-python utils/seg_train.py
-```
-
-Inference:
+Quick reconstruction based on GT masks:
 
 ```bash
-python utils/seg_test.py
-```
-
-Output:
-
-```
-centerline masks
-```
-
----
-
-### 2️⃣ Reconstruction Pipeline
-
-Quick run reconstruction based on GT masks:
-
-```bash
-python core/main.py
+python core/main.py --category simulation --receive mask --refine
 ```
 
 Pipeline:
@@ -124,10 +102,10 @@ Triangulation
 
 ---
 
-### 3️⃣ Reconstruction from Ordered Points
+### 2️⃣ Reconstruction from Ordered Points
 
 ```bash
-python core/main_point.py
+python core/main_point.py --category simulation --method ACCURATE --refine
 ```
 
 This bypasses segmentation and traversal.
@@ -142,6 +120,12 @@ We follow standard reconstruction metrics:
 * **Completeness (Comp.)**
 * **Chamfer Distance (Overall)**
 * **Maximum Error (Max Err.)**
+
+To reproduce results, try:
+
+```bash
+python utils/test.py
+```
 
 ---
 
