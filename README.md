@@ -37,6 +37,14 @@ The method achieves **sub-millimeter reconstruction accuracy** on both simulated
 
 ---
 
+## 🥰 Environment
+
+```bash
+conda create -n ACCURATE python=3.7.16
+conda activate ACCURATE
+pip install -r requirements.txt
+```
+
 ## 📂 Repository Structure
 
 ```
