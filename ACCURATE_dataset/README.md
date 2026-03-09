@@ -13,6 +13,8 @@ This dataset accompanies the paper:
   - Ground-truth 3D centerline point cloud
 
 ## Folder Structure
+
+```
 ACCURATE_Dataset/
 │
 ├── phantom/                 # 200 real phantom cases
@@ -32,3 +34,4 @@ ACCURATE_Dataset/
 │   └── phantom_test.txt
 │
 └── README.md
+```
