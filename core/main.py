@@ -312,6 +312,13 @@ if __name__ == '__main__':
         help='Lambda_d in GCTT (default: 0.5)'
     )
 
+    parser.add_argument(
+        '--save_path',
+        type=str,
+        default='experiment',
+        help='Save path for reconstruction results (default: experiment)'
+    )
+
     args = parser.parse_args()
 
     category = args.category
@@ -320,6 +327,7 @@ if __name__ == '__main__':
     refine = args.refine
     lmda = args.lmda
     lmdd = args.lmdd
+    save_path = args.save_path
 
     if receive == 'image':
         data_path = f'experiment/{receive}/{category}/prediction_results'
@@ -361,4 +369,5 @@ if __name__ == '__main__':
         pcd = ecdp(seq_L, seq_R, F, P1, P2, refine)
 
         # pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
-        o3d.io.write_point_cloud(f"experiment/{receive}/{category}/{method}/{test_name}.ply", pcd)
+        os.makedirs(f"{save_path}/{receive}/{category}/{method}", exist_ok=True)
+        o3d.io.write_point_cloud(f"{save_path}/{receive}/{category}/{method}/{test_name}.ply", pcd)

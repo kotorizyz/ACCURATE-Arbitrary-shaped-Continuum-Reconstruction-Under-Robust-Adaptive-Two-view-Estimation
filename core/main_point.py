@@ -432,27 +432,39 @@ def triangulate_points(matches, left_pts, right_pts, P1, P2):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
         '--category',
         type=str,
         default='simulation',
         help='Dataset category: simulation or phantom (default: simulation)'
     )
+
     parser.add_argument(
         '--method',
         type=str,
         default='ACCURATE',
         help='Reconstruction method: ACCURATE/TMI03/TMI15 (default: ACCURATE)'
     )
+
     parser.add_argument(
         '--refine',
         action='store_true',
         help='Enable refinement step (default: False)'
     )
+
+    parser.add_argument(
+        '--save_path',
+        type=str,
+        default='experiment',
+        help='Save path for reconstruction results (default: experiment)'
+    )
+    
     args = parser.parse_args()
     category = args.category
     method = args.method
     refine = args.refine
+    save_path = args.save_path
 
     if category == 'simulation':
         H,W = 2048, 512
@@ -544,4 +556,4 @@ if __name__ == '__main__':
             pts_2d_R = pts_2d_R[:,::-1]
             pcd = ecdp(pts_2d_L, pts_2d_R, F, P1, P2, refine)
         
-        o3d.io.write_point_cloud(f"experiment/point/{category}/{method}/{test_name}.ply", pcd)
+        o3d.io.write_point_cloud(f"{save_path}/point/{category}/{method}/{test_name}.ply", pcd)

@@ -102,11 +102,20 @@ if __name__ == '__main__':
         default='ACCURATE',
         help='Reconstruction method: ACCURATE/TMI03/TMI15/vggt/Fast3R/MonSter (default: ACCURATE)'
     )
+
+    parser.add_argument(
+        '--save_path',
+        type=str,
+        default='experiment',
+        help='Save path for reconstruction results (default: experiment)'
+    )
+
     args = parser.parse_args()
 
     category = args.category
     receive = args.receive
     method = args.method
+    save_path = args.save_path
 
     test_names = []
     with open(f'ACCURATE_dataset/splits/{category}_test.txt', 'r', encoding='utf-8') as f:
@@ -125,11 +134,11 @@ if __name__ == '__main__':
         gt = np.asarray(gt.points)
 
         if receive == 'image':
-            rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/prediction_results/{test_name}.ply')
+            rec = o3d.io.read_point_cloud(f'{save_path}/{receive}/{category}/prediction_results/{test_name}.ply')
         elif receive == 'mask':
-            rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/{method}/{test_name}.ply')
+            rec = o3d.io.read_point_cloud(f'{save_path}/{receive}/{category}/{method}/{test_name}.ply')
         elif receive == 'point':
-            rec = o3d.io.read_point_cloud(f'experiment/{receive}/{category}/{method}/{test_name}.ply')
+            rec = o3d.io.read_point_cloud(f'{save_path}/{receive}/{category}/{method}/{test_name}.ply')
 
         rec = np.asarray(rec.points)
 
