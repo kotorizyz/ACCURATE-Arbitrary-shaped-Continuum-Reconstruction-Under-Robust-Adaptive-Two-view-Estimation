@@ -459,7 +459,7 @@ if __name__ == '__main__':
         default='experiment',
         help='Save path for reconstruction results (default: experiment)'
     )
-    
+
     args = parser.parse_args()
     category = args.category
     method = args.method
@@ -556,4 +556,5 @@ if __name__ == '__main__':
             pts_2d_R = pts_2d_R[:,::-1]
             pcd = ecdp(pts_2d_L, pts_2d_R, F, P1, P2, refine)
         
+        os.makedirs(f"{save_path}/point/{category}/{method}", exist_ok=True)
         o3d.io.write_point_cloud(f"{save_path}/point/{category}/{method}/{test_name}.ply", pcd)
