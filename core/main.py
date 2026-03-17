@@ -165,7 +165,7 @@ def traverse_curve(mask, window_size=10, r_min=1, r_max=2, gap_threshold=3, star
         curr_point = next_point
     return sequence
 
-def gctt(mask_L, mask_R, F):
+def gctt(mask_L, mask_R, F, lmda, lmdd):
     # fix gaps & get endpoints
     mask_L, end_points_L = fix_gaps(mask_L)
     mask_R, end_points_R = fix_gaps(mask_R)
@@ -176,8 +176,8 @@ def gctt(mask_L, mask_R, F):
     start_point_R = end_points_R[np.unravel_index(np.argmin(dist_endpoints), dist_endpoints.shape)[1]]
 
     # traversal
-    seq_L = traverse_curve(mask_L, start_point=start_point_L, r_min=10, r_max=50)
-    seq_R = traverse_curve(mask_R, start_point=start_point_R, r_min=10, r_max=50)
+    seq_L = traverse_curve(mask_L, start_point=start_point_L, r_min=10, r_max=50, lmda=lmda, lmdd=lmdd)
+    seq_R = traverse_curve(mask_R, start_point=start_point_R, r_min=10, r_max=50, lmda=lmda, lmdd=lmdd)
 
     return seq_L, seq_R
 
@@ -298,12 +298,28 @@ if __name__ == '__main__':
         help='Enable refinement step (default: False)'
     )
 
+    parser.add_argument(
+        '--lmda',
+        type=float,
+        default=1.0,
+        help='Lambda_a in GCTT (default: 1.0)'
+    )
+
+    parser.add_argument(
+        '--lmdd',
+        type=float,
+        default=0.5,
+        help='Lambda_d in GCTT (default: 0.5)'
+    )
+
     args = parser.parse_args()
 
     category = args.category
     receive = args.receive
     method = args.method
     refine = args.refine
+    lmda = args.lmda
+    lmdd = args.lmdd
 
     if receive == 'image':
         data_path = f'experiment/{receive}/{category}/prediction_results'
@@ -341,7 +357,7 @@ if __name__ == '__main__':
         t_R = RT_R[:,3]
         R, T, E, F, P1, P2 = compute_stereo_params(K_L,K_R,R_L,R_R,t_L,t_R)
 
-        seq_L, seq_R = gctt(mask_L, mask_R, F)
+        seq_L, seq_R = gctt(mask_L, mask_R, F, lmda, lmdd)
         pcd = ecdp(seq_L, seq_R, F, P1, P2, refine)
 
         # pcd = reconstruction(seq_L, seq_R, matches, P1, P2)
